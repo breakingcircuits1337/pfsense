@@ -1,0 +1,7 @@
+<?php
+// This is a placeholder. In production, use a real .ico file.
+// For now, use a minimal PNG as favicon with neon-green "PFn".
+header('Content-Type: image/svg+xml');
+echo '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#0d0d0d"/><text x="10" y="44" font-family="monospace" font-size="32" fill="#00ff00" style="text-shadow:0 0 8px #00ff00;">PFn</text></svg>';
+exit;
+?>

@@ -52,7 +52,28 @@ if (config_get_path('system/webgui/dashboardcolumns') === null) {
 }
 
 ?>
+<?php
+// Branding include (with fallback)
+if (@include_once(__DIR__ . '/../etc/inc/branding.inc')) {
+    if (!defined('BRAND_NAME')) define('BRAND_NAME', "BC's PFnonsense");
+    if (!defined('BRAND_LOGO_PATH')) define('BRAND_LOGO_PATH', '/img/bc_logo.svg');
+} else {
+    define('BRAND_NAME', "BC's PFnonsense");
+    define('BRAND_LOGO_PATH', '/img/bc_logo.svg');
+}
+?>
 <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= BRAND_NAME ?><?=(isset($title) ? " - " . $title : "")?></title>
+    <link rel="shortcut icon" href="/img/favicon.ico">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/pfSense.css">
+    <link rel="stylesheet" href="/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/css/hacker.css">
 <html lang="en">
 <head>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -494,8 +515,8 @@ if (are_notices_pending()) {
 				<span class="icon-bar"></span>
 			</button>
 			<a class="navbar-brand" href="/">
-				<?php include("/usr/local/www/logo.svg"); ?>
-				<span style="color:white;font-size:.5em;text-transform:uppercase;letter-spacing:1px;">Community Edition</span>
+				<img src="<?= BRAND_LOGO_PATH ?>" alt="<?= BRAND_NAME ?> logo" style="height:40px;vertical-align:middle;">
+				<span style="color:#00ff00;font-family:monospace;font-size:22px;text-shadow:0 0 8px #00ff00;"><?= BRAND_NAME ?></span>
 			</a>
 		</div>
 		<div class="collapse navbar-collapse" id="pf-navbar">

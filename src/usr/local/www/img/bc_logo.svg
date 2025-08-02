@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="60" viewBox="0 0 220 60">
+  <style>
+    .hacker {
+      font-family: 'Fira Mono', 'Consolas', monospace;
+      font-size: 40px;
+      fill: #00ff00;
+      text-shadow: 0 0 8px #00ff00, 0 0 16px #00ff00;
+      filter: drop-shadow(0 0 8px #00ff00);
+    }
+  </style>
+  <rect width="220" height="60" fill="transparent"/>
+  <text x="10" y="44" class="hacker">PFnonsense</text>
+</svg>
