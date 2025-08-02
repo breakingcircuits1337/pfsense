@@ -108,6 +108,13 @@ function sendMessage() {
         alert("Failed: " + data.reply);
       }
     }
+    if (data.action === 'suggest' && Array.isArray(data.suggestions)) {
+      let msg = "Emerging Threats suggestions:\n";
+      data.suggestions.forEach(function(s) {
+        msg += "SID " + s.sid + ": " + s.msg + "\n";
+      });
+      alert(msg);
+    }
   })
   .catch(() => {
     appendMessage('AI', '[Error: No response]');
@@ -137,7 +144,7 @@ require_once("guiconfig.inc");
 require_once("/etc/inc/ai.inc");
 
 $voice_enabled = $config['system']['ai']['voice_enable'] ?? false;
-$system_prompt = 'If you wish to enable/disable/add IDS/IPS rules, reply only with a valid JSON object: {"target":"snort|suricata","action":"enable|disable|add","sid":SID,"rule":"<text>","message":"..."}';
+$system_prompt = 'If you wish to enable/disable/add IDS/IPS rules, reply only with a valid JSON object: {"target":"snort|suricata","action":"enable|disable|add","sid":SID,"rule":"<text>","message":"..."}; or if you want rule suggestions, respond with {"target":"suricata|snort","action":"suggest","keyword":"<search words>"}';
 
 include("head.inc");
 ?> include("foot.inc"); ?>

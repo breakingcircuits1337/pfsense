@@ -56,3 +56,35 @@ function ids_reload($type) {
 		mwexec($cmd);
 	}
 }
+
+// Emerging Threats Rule Index helpers
+function load_et_index() {
+	static $index = null;
+	if ($index !== null) return $index;
+	$file = '/var/db/et_index.json';
+	if (!file_exists($file)) return [];
+	$index = @json_decode(file_get_contents($file), true);
+	if (!is_array($index)) $index = [];
+	return $index;
+}
+function et_lookup_sid($sid) {
+	$rules = load_et_index();
+	foreach ($rules as $rule) {
+		if ($rule['sid'] == $sid) return $rule;
+	}
+	return null;
+}
+// $kw can be space-separated, match any substring in msg, return up to $limit
+function et_search_keywords($kw, $limit = 5) {
+	$rules = load_et_index();
+	if (!$kw) return [];
+	$kw = strtolower($kw);
+	$results = [];
+	foreach ($rules as $rule) {
+		if (strpos(strtolower($rule['msg']), $kw) !== false) {
+			$results[] = ['sid'=>$rule['sid'], 'msg'=>$rule['msg']];
+			if (count($results) >= $limit) break;
+		}
+	}
+	return $results;
+}
