@@ -17,6 +17,18 @@ abstract class AIProvider {
     protected function join_messages($messages) {
         return is_array($messages) ? implode(" ", $messages) : strval($messages);
     }
+    // Helper for config with fallback/default
+    public static function get_config_value($path, $default = null) {
+        global $config;
+        $node = $config;
+        foreach (explode('/', $path) as $seg) {
+            if (!is_array($node) || !array_key_exists($seg, $node)) {
+                return $default;
+            }
+            $node = $node[$seg];
+        }
+        return $node;
+    }
 }
 
 class ProviderGemini extends AIProvider {

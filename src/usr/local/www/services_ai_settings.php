@@ -31,6 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $config['system']['ai']['gemini']['model'] = $_POST['gemini_model'] ?? 'gemini-pro';
     $config['system']['ai']['mistral']['model'] = $_POST['mistral_model'] ?? 'mistral-tiny';
     $config['system']['ai']['groq']['model'] = $_POST['groq_model'] ?? 'mixtral-8x7b-32768';
+    $config['system']['ai']['monitor']['threshold'] =
+        isset($_POST['monitor_threshold']) && is_numeric($_POST['monitor_threshold']) ? floatval($_POST['monitor_threshold']) : 0.7;
+    $config['system']['ai']['monitor']['block_ttl_hours'] =
+        isset($_POST['monitor_block_ttl_hours']) && is_numeric($_POST['monitor_block_ttl_hours']) ? intval($_POST['monitor_block_ttl_hours']) : 24;
 
     write_config("AI Assistant settings updated");
     $savemsg = "Settings saved successfully.";
@@ -87,6 +91,16 @@ include("head.inc");
       <label>
         <input type="checkbox" name="voice_enable" <?=!empty($pconfig['voice_enable'])?'checked':''?>> Enable voice features (speech recognition & TTS)
       </label>
+    </div>
+    <div class="form-group">
+      <label>Confidence Threshold</label>
+      <input type="number" min="0" max="1" step="0.05" class="form-control" name="monitor_threshold" value="<?=htmlspecialchars($config['system']['ai']['monitor']['threshold'] ?? '0.7')?>">
+      <span class="help-block">Only block if confidence is at or above this value (0–1).</span>
+    </div>
+    <div class="form-group">
+      <label>Block Lifespan (hours)</label>
+      <input type="number" min="1" step="1" class="form-control" name="monitor_block_ttl_hours" value="<?=htmlspecialchars($config['system']['ai']['monitor']['block_ttl_hours'] ?? '24')?>">
+      <span class="help-block">How many hours each IP remains blocked before automatic unblock.</span>
     </div>
     <div class="checkbox">
       <label>

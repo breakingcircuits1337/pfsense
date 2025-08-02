@@ -51,9 +51,10 @@ function pfctl_block($ip) {
 function pfctl_create() {
     mwexec('/sbin/pfctl -t ai_blocklist -T show 2>/dev/null || /sbin/pfctl -t ai_blocklist -T create');
 }
-function blocklist_add($ip, $reason) {
+function blocklist_add($ip, $reason, $ttl_hours = 24) {
     $file = '/var/db/ai_blocklist.json';
-    $rec = [ 'ip' => $ip, 'reason' => $reason, 'ts' => date('c') ];
+    $expire_ts = time() + (int)($ttl_hours * 3600);
+    $rec = [ 'ip' => $ip, 'reason' => $reason, 'ts' => date('c'), 'expire_ts' => $expire_ts ];
     $rows = [];
     if (file_exists($file)) {
         $rows = json_decode(file_get_contents($file), true);
@@ -78,6 +79,17 @@ function syslog_notice($msg) {
     openlog("pfSense/AI", LOG_PID, LOG_USER);
     syslog(LOG_NOTICE, $msg);
     closelog();
+}
+function ai_event_log($type, $ip, $reason = '') {
+    $f = '/var/db/ai_events.log';
+    $rec = ['type'=>$type,'ip'=>$ip,'reason'=>$reason,'ts'=>date('c')];
+    file_put_contents($f, json_encode($rec) . "\n", FILE_APPEND);
+    // Truncate if >1MB
+    if (file_exists($f) && filesize($f) > 1024*1024) {
+        $lines = file($f);
+        $lines = array_slice($lines, -250); // keep last 250
+        file_put_contents($f, implode("", $lines));
+    }
 }
 
 function lru_cache(&$cache, $ip, $max = 1000) {
@@ -109,23 +121,45 @@ $pos = $inode = [];
 $lru = [];
 
 while ($running) {
+    // Remove expired blocks
+    $bl_file = '/var/db/ai_blocklist.json';
+    $now = time();
+    $rows = file_exists($bl_file) ? json_decode(file_get_contents($bl_file), true) : [];
+    if (!is_array($rows)) $rows = [];
+    $changed = false;
+    foreach ($rows as $i => $row) {
+        if (isset($row['expire_ts']) && $row['expire_ts'] < $now) {
+            mwexec('/sbin/pfctl -t ai_blocklist -T delete ' . escapeshellarg($row['ip']));
+            syslog_notice("AI unblocked {$row['ip']}: expired");
+            ai_event_log("unblock", $row['ip']);
+            unset($rows[$i]);
+            $changed = true;
+        }
+    }
+    if ($changed) file_put_contents($bl_file, json_encode(array_values($rows)));
+
+    // Get threshold/ttl from config
+    $threshold = \ProviderGemini::get_config_value('system/ai/monitor/threshold', 0.7);
+    $block_ttl = \ProviderGemini::get_config_value('system/ai/monitor/block_ttl_hours', 24);
+
     foreach ($log_files as $idx => $log) {
         $lines = tail_log($log, $inode[$log], $pos[$log]);
         foreach ($lines as $line) {
             $ip = parse_ip($line);
             if (!$ip || is_blocked($ip) || isset($lru[$ip])) continue;
             lru_cache($lru, $ip, 5000);
-            $prompt = 'You are a network security expert. Evaluate the following log line. If it indicates malicious or suspicious activity return exactly JSON {"action":"block","reason":"<short>"}.' .
-                      ' Otherwise return JSON {"action":"ignore"}. Log line: ' . $line;
+            $prompt = 'You are a network security expert. Evaluate the following log line. If it indicates malicious or suspicious activity return exactly JSON {"action":"block","reason":"<short>","confidence":0.95}. Otherwise return JSON {"action":"ignore"}. Log line: ' . $line;
             try {
                 $provider_name = ($GLOBALS['config']['system']['ai']['default_provider'] ?? 'gemini');
                 $provider = AIProviderFactory::make($provider_name);
                 $reply = $provider->send_chat([$prompt]);
                 $json = json_decode(trim($reply), true);
-                if (isset($json['action']) && $json['action'] === 'block' && !empty($json['reason'])) {
+                $confidence = isset($json['confidence']) ? floatval($json['confidence']) : 1.0;
+                if (isset($json['action']) && $json['action'] === 'block' && !empty($json['reason']) && $confidence >= floatval($threshold)) {
                     pfctl_block($ip);
-                    blocklist_add($ip, $json['reason']);
+                    blocklist_add($ip, $json['reason'], $block_ttl);
                     syslog_notice("AI blocked $ip: " . $json['reason']);
+                    ai_event_log("block", $ip, $json['reason']);
                 }
             } catch (\Exception $e) {
                 syslog_notice("AI Threat Monitor error: " . $e->getMessage());

@@ -85,9 +85,39 @@ include("head.inc");
   </div>
 </div>
 <script>
+// Select all
 document.getElementById('selectall').onclick = function() {
   var boxes = document.querySelectorAll('input[name="unblock[]"]');
   for (var i=0; i<boxes.length; i++) { boxes[i].checked = this.checked; }
 };
+
+// SSE event stream
+if (!!window.EventSource) {
+  const evtSrc = new EventSource('/api/ai_events.php');
+  evtSrc.addEventListener('block', function(e) {
+    var data = JSON.parse(e.data);
+    // Add new row if not exists
+    if (!document.querySelector('input[value="'+data.ip+'"]')) {
+      var tbody = document.querySelector('table tbody');
+      var row = document.createElement('tr');
+      row.innerHTML = '<td><input type="checkbox" name="unblock[]" value="'+data.ip+'"></td>' +
+                      '<td>'+data.ip+'</td>' +
+                      '<td>'+data.ts+'</td>' +
+                      '<td>'+data.reason+'</td>';
+      tbody.appendChild(row);
+    }
+    alert("AI blocked IP " + data.ip + ": " + data.reason);
+  });
+  evtSrc.addEventListener('unblock', function(e) {
+    var data = JSON.parse(e.data);
+    // Remove row
+    var box = document.querySelector('input[value="'+data.ip+'"]');
+    if (box) {
+      var row = box.closest('tr');
+      row.parentNode.removeChild(row);
+    }
+    alert("AI unblocked IP " + data.ip);
+  });
+}
 </script>
 <?php include("foot.inc"); ?>

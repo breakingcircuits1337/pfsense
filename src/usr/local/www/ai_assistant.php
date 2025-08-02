@@ -35,8 +35,8 @@ include("head.inc");
   &lt;/div&gt;
 &lt;/div&gt;
 
-&lt;script src="/js/jquery.min.js"&gt;&lt;/script&gt;
-&lt;script&gt;
+<script src="/js/jquery.min.js"></script>
+<script>
 let voiceEnabled = <?= $voice_enabled ? 'true' : 'false' ?>;
 let recognition, recognizing = false;
 
@@ -69,13 +69,13 @@ if ('webkitSpeechRecognition' in window) {
 }
 
 function appendMessage(sender, text) {
-  let html = '&lt;div class="mb-2"&gt;&lt;strong&gt;'+sender+'&lt;/strong&gt;: '+text+'&lt;/div&gt;';
+  let html = '<div class="mb-2"><strong>'+sender+'</strong>: '+text+'</div>';
   $('#chat-history').append(html);
   $('#chat-history').scrollTop($('#chat-history')[0].scrollHeight);
 }
 
 function speak(text) {
-  if (voiceEnabled &amp;&amp; 'speechSynthesis' in window) {
+  if (voiceEnabled && 'speechSynthesis' in window) {
     let utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
     speechSynthesis.speak(utter);
@@ -93,15 +93,28 @@ function sendMessage() {
     body: JSON.stringify({message: msg}),
     credentials: 'same-origin'
   })
-  .then(res =&gt; res.json())
-  .then(data =&gt; {
+  .then(res => res.json())
+  .then(data => {
     appendMessage('AI', data.reply);
     speak(data.reply);
   })
-  .catch(() =&gt; {
+  .catch(() => {
     appendMessage('AI', '[Error: No response]');
   });
 }
-&lt;/script&gt;
+
+// SSE event stream for block/unblock toasts
+if (!!window.EventSource) {
+  const evtSrc = new EventSource('/api/ai_events.php');
+  evtSrc.addEventListener('block', function(e) {
+    var data = JSON.parse(e.data);
+    alert("AI blocked IP " + data.ip + ": " + data.reason);
+  });
+  evtSrc.addEventListener('unblock', function(e) {
+    var data = JSON.parse(e.data);
+    alert("AI unblocked IP " + data.ip);
+  });
+}
+</script>
 
 <?php include("foot.inc"); ?>
