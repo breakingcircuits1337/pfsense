@@ -11,7 +11,10 @@
     "psr-4": {
       "pfSense\\": "src/",
       "AI\\": "src/etc/inc/"
-    }
+    },
+    "files": [
+      "src/etc/inc/ai.inc"
+    ]
   },
     "config": {
         "vendor-dir": "src/usr/local/pfSense/include/vendor",

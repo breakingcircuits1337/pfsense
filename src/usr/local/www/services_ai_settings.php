@@ -9,11 +9,15 @@ require_once("/etc/inc/ai.inc");
 
 $ai_path = array('system', 'ai');
 $pconfig = array(
-    'provider' =&gt; $config['system']['ai']['default_provider'] ?? 'gemini',
-    'apikey_gemini' =&gt; $config['system']['ai']['gemini']['apikey'] ?? '',
-    'apikey_mistral' =&gt; $config['system']['ai']['mistral']['apikey'] ?? '',
-    'apikey_groq' =&gt; $config['system']['ai']['groq']['apikey'] ?? '',
-    'voice_enable' =&gt; $config['system']['ai']['voice_enable'] ?? false,
+    'provider' => $config['system']['ai']['default_provider'] ?? 'gemini',
+    'apikey_gemini' => $config['system']['ai']['gemini']['apikey'] ?? '',
+    'apikey_mistral' => $config['system']['ai']['mistral']['apikey'] ?? '',
+    'apikey_groq' => $config['system']['ai']['groq']['apikey'] ?? '',
+    'voice_enable' => $config['system']['ai']['voice_enable'] ?? false,
+    'monitor_enable' => $config['system']['ai']['monitor']['enable'] ?? false,
+    'gemini_model' => $config['system']['ai']['gemini']['model'] ?? 'gemini-pro',
+    'mistral_model' => $config['system']['ai']['mistral']['model'] ?? 'mistral-tiny',
+    'groq_model' => $config['system']['ai']['groq']['model'] ?? 'mixtral-8x7b-32768',
 );
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -23,15 +27,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $config['system']['ai']['mistral']['apikey'] = $_POST['apikey_mistral'] ?? '';
     $config['system']['ai']['groq']['apikey']    = $_POST['apikey_groq'] ?? '';
     $config['system']['ai']['voice_enable'] = isset($_POST['voice_enable']);
+    $config['system']['ai']['monitor']['enable'] = isset($_POST['monitor_enable']);
+    $config['system']['ai']['gemini']['model'] = $_POST['gemini_model'] ?? 'gemini-pro';
+    $config['system']['ai']['mistral']['model'] = $_POST['mistral_model'] ?? 'mistral-tiny';
+    $config['system']['ai']['groq']['model'] = $_POST['groq_model'] ?? 'mixtral-8x7b-32768';
 
     write_config("AI Assistant settings updated");
     $savemsg = "Settings saved successfully.";
     $pconfig = array(
-        'provider' =&gt; $provider,
-        'apikey_gemini' =&gt; $config['system']['ai']['gemini']['apikey'],
-        'apikey_mistral' =&gt; $config['system']['ai']['mistral']['apikey'],
-        'apikey_groq' =&gt; $config['system']['ai']['groq']['apikey'],
-        'voice_enable' =&gt; $config['system']['ai']['voice_enable'],
+        'provider' => $provider,
+        'apikey_gemini' => $config['system']['ai']['gemini']['apikey'],
+        'apikey_mistral' => $config['system']['ai']['mistral']['apikey'],
+        'apikey_groq' => $config['system']['ai']['groq']['apikey'],
+        'voice_enable' => $config['system']['ai']['voice_enable'],
+        'monitor_enable' => $config['system']['ai']['monitor']['enable'],
+        'gemini_model' => $config['system']['ai']['gemini']['model'],
+        'mistral_model' => $config['system']['ai']['mistral']['model'],
+        'groq_model' => $config['system']['ai']['groq']['model'],
     );
 }
 
@@ -53,26 +65,37 @@ include("head.inc");
         &lt;option value="groq" <?=($pconfig['provider']=='groq')?'selected':''?&gt;&gt;Groq&lt;/option&gt;
       &lt;/select&gt;
     &lt;/div&gt;
-    &lt;div class="form-group"&gt;
-      &lt;label&gt;Gemini API Key&lt;/label&gt;
-      &lt;input type="text" class="form-control" name="apikey_gemini" value="<?=htmlspecialchars($pconfig['apikey_gemini'])?>" autocomplete="off"&gt;
-    &lt;/div&gt;
-    &lt;div class="form-group"&gt;
-      &lt;label&gt;Mistral API Key&lt;/label&gt;
-      &lt;input type="text" class="form-control" name="apikey_mistral" value="<?=htmlspecialchars($pconfig['apikey_mistral'])?>" autocomplete="off"&gt;
-    &lt;/div&gt;
-    &lt;div class="form-group"&gt;
-      &lt;label&gt;Groq API Key&lt;/label&gt;
-      &lt;input type="text" class="form-control" name="apikey_groq" value="<?=htmlspecialchars($pconfig['apikey_groq'])?>" autocomplete="off"&gt;
-    &lt;/div&gt;
-    &lt;div class="checkbox"&gt;
-      &lt;label&gt;
-        &lt;input type="checkbox" name="voice_enable" <?=!empty($pconfig['voice_enable'])?'checked':''?&gt;&gt; Enable voice features (speech recognition &amp; TTS)
-      &lt;/label&gt;
-    &lt;/div&gt;
-    &lt;button class="btn btn-primary" type="submit"&gt;Save&lt;/button&gt;
-  &lt;/div&gt;
-&lt;/div&gt;
-&lt;/form&gt;
+    <div class="form-group">
+      <label>Gemini API Key</label>
+      <input type="text" class="form-control" name="apikey_gemini" value="<?=htmlspecialchars($pconfig['apikey_gemini'])?>" autocomplete="off">
+      <label class="mt-2">Gemini Model</label>
+      <input type="text" class="form-control" name="gemini_model" value="<?=htmlspecialchars($pconfig['gemini_model'])?>" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Mistral API Key</label>
+      <input type="text" class="form-control" name="apikey_mistral" value="<?=htmlspecialchars($pconfig['apikey_mistral'])?>" autocomplete="off">
+      <label class="mt-2">Mistral Model</label>
+      <input type="text" class="form-control" name="mistral_model" value="<?=htmlspecialchars($pconfig['mistral_model'])?>" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Groq API Key</label>
+      <input type="text" class="form-control" name="apikey_groq" value="<?=htmlspecialchars($pconfig['apikey_groq'])?>" autocomplete="off">
+      <label class="mt-2">Groq Model</label>
+      <input type="text" class="form-control" name="groq_model" value="<?=htmlspecialchars($pconfig['groq_model'])?>" autocomplete="off">
+    </div>
+    <div class="checkbox">
+      <label>
+        <input type="checkbox" name="voice_enable" <?=!empty($pconfig['voice_enable'])?'checked':''?>> Enable voice features (speech recognition & TTS)
+      </label>
+    </div>
+    <div class="checkbox">
+      <label>
+        <input type="checkbox" name="monitor_enable" <?=!empty($pconfig['monitor_enable'])?'checked':''?>> Enable Threat Monitor
+      </label>
+    </div>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </div>
+</div>
+</form>
 
 <?php include("foot.inc"); ?>

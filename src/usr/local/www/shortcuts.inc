@@ -303,4 +303,8 @@ $shortcuts['aliases']['status'] = "diag_tables.php";
 $shortcuts['aiassistant'] = array();
 $shortcuts['aiassistant']['main'] = "ai_assistant.php";
 
+// AI Threats shortcut (Diagnostics)
+$shortcuts['aithreats'] = array();
+$shortcuts['aithreats']['main'] = "diag_ai_threats.php";
+
 ?>
