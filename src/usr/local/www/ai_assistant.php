@@ -90,13 +90,24 @@ function sendMessage() {
   fetch('/api/ai_chat.php', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message: msg}),
+    body: JSON.stringify({
+      message: msg,
+      system: <?= json_encode($system_prompt) ?>
+    }),
     credentials: 'same-origin'
   })
   .then(res => res.json())
   .then(data => {
     appendMessage('AI', data.reply);
     speak(data.reply);
+    // IDS/IPS action toast
+    if (data.action && (data.action === 'enable' || data.action === 'disable' || data.action === 'add')) {
+      if (data.success) {
+        alert("Success: " + data.reply);
+      } else {
+        alert("Failed: " + data.reply);
+      }
+    }
   })
   .catch(() => {
     appendMessage('AI', '[Error: No response]');
@@ -117,4 +128,16 @@ if (!!window.EventSource) {
 }
 </script>
 
-<?php include("foot.inc"); ?>
+<?php
+/*
+ * ai_assistant.php
+ * pfSense AI Assistant - Chat-style interface
+ */
+require_once("guiconfig.inc");
+require_once("/etc/inc/ai.inc");
+
+$voice_enabled = $config['system']['ai']['voice_enable'] ?? false;
+$system_prompt = 'If you wish to enable/disable/add IDS/IPS rules, reply only with a valid JSON object: {"target":"snort|suricata","action":"enable|disable|add","sid":SID,"rule":"<text>","message":"..."}';
+
+include("head.inc");
+?> include("foot.inc"); ?>

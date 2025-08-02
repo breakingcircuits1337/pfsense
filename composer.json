@@ -13,7 +13,8 @@
       "AI\\": "src/etc/inc/"
     },
     "files": [
-      "src/etc/inc/ai.inc"
+      "src/etc/inc/ai.inc",
+      "src/etc/inc/ids.inc"
     ]
   },
     "config": {
