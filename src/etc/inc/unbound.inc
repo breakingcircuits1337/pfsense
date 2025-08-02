@@ -530,7 +530,8 @@ prefetch: {$prefetch}
 prefetch-key: {$prefetch_key}
 use-caps-for-id: {$use_caps}
 serve-expired: {$dns_record_cache}
-sock-queue-timeout: {$sock_queue_timeout}
+# Not supported on FreeBSD. See https://redmine.pfsense.org/issues/16299
+# sock-queue-timeout: {$sock_queue_timeout}
 aggressive-nsec: {$aggressivensec}
 # Statistics
 {$statistics}
@@ -550,8 +551,24 @@ include: {$g['unbound_chroot_path']}{$cfgsubdir}/access_lists.conf
 # Static host entries
 include: {$g['unbound_chroot_path']}{$cfgsubdir}/host_entries.conf
 
+
+EOD;
+
+if (dhcp_is_backend('isc')) {
+	$unboundconf .= <<< EOD
 # dhcp lease entries
 include: {$g['unbound_chroot_path']}{$cfgsubdir}/dhcpleases_entries.conf
+EOD;
+} elseif (dhcp_is_backend('kea') &&
+    (kea_dnsreg_enabled() || kea6_dnsreg_enabled())) {
+	$unboundconf .= <<< EOD
+# kea2unbound entries
+include: {$g['unbound_chroot_path']}{$cfgsubdir}/leases/*
+EOD;
+}
+
+$unboundconf .= <<< EOD
+
 
 {$openvpn_clients_conf}
 
@@ -665,8 +682,18 @@ function do_as_unbound_user($cmd, $param1 = "") {
 			// When there are conectivity issues, it may take ~10 seconds for the command to time out
 			mwexec("/usr/bin/su -m unbound -c '/usr/local/sbin/unbound-anchor -a {$root_key_file}'", true);
 			// Only sync the file if this is the real (default) one, not a test one.
-			if ($param1 == "") {
-				//pfSense_fsync($root_key_file);
+			if (($param1 == "") && file_exists($root_key_file)) {
+				$fd = fopen($root_key_file, 'r');
+				if ($fd !== false) {
+					fsync($fd);
+					fclose($fd);
+
+					$dir_fd = fopen(dirname($root_key_file), 'r');
+					if ($dir_fd !== false) {
+						fsync($dir_fd);
+						fclose($dir_fd);
+					}
+				}
 			}
 			break;
 		case "unbound-control-setup":

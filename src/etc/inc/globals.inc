@@ -82,7 +82,7 @@ $g = [
 	'disablehelpicon' => false,
 	'disablecrashreporter' => false,
 	'debug' => false,
-	'latest_config' => '23.9',
+	'latest_config' => '24.0',
 	'minimum_ram_warning' => '101',
 	'minimum_ram_warning_text' => '128 MB',
 	'wan_interface_name' => 'wan',
@@ -109,7 +109,9 @@ $g = [
 		'voucher' => '/var/db/voucher_*.db'
 	],
 	'cp_prefix' => 'cpzoneid',
-	'booting' => false
+	'booting' => false,
+	'rrddbpath' => '/var/db/rrd',
+	'rrdtool' => '/usr/bin/nice -n20 /usr/local/bin/rrdtool'
 ];
 
 /* IP TOS flags */
@@ -226,6 +228,7 @@ $dyndns_split_domain_types = [
 	'godaddy', 'godaddy-v6',
 	'gratisdns',
 	'linode', 'linode-v6',
+	'luadns', 'luadns-v6',
 	"mythicbeasts", "mythicbeasts-v6",
 	'namecheap',
 	"name.com", "name.com-v6",

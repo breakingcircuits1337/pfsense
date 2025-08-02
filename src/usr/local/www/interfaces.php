@@ -120,7 +120,7 @@ foreach ($a_ppps as $pid => $ppp) {
 
 $type_disabled = (substr(array_get_path($wancfg, 'if', ''), 0, 3) == 'gre') ? 'disabled' : '';
 
-if (array_get_path($wancfg, 'if') == array_get_path($a_ppps, "{$pppid}/if")) {
+if (isset($pppid) && array_get_path($wancfg, 'if') == array_get_path($a_ppps, "{$pppid}/if")) {
 	array_set_path($pconfig, 'pppid', $pppid);
 	array_set_path($pconfig, 'ptpid', array_get_path($a_ppps, "{$pppid}/ptpid"));
 	array_set_path($pconfig, 'port', array_get_path($a_ppps, "{$pppid}/ports"));
@@ -1317,7 +1317,7 @@ if ($_POST['apply']) {
 		if (empty(array_get_path($wancfg, 'pppoe/pppoe-reset-type'))) {
 			array_del_path($wancfg, 'pppoe/pppoe-reset-type');
 		}
-		if (is_array(array_get_path($a_ppps, $pppid)) &&
+		if (isset($pppid) && is_array(array_get_path($a_ppps, $pppid)) &&
 		    in_array(array_get_path($wancfg, 'ipaddr'), ["ppp", "pppoe", "pptp", "l2tp"])) {
 			if (array_get_path($wancfg, 'ipaddr') != 'ppp') {
 				array_del_path($a_ppps, "{$pppid}/apn");
@@ -1391,6 +1391,9 @@ if ($_POST['apply']) {
 				}
 				break;
 			case "ppp":
+				if (!isset($pppid)) {
+					break;
+				}
 				array_set_path($a_ppps, "{$pppid}/ptpid", $_POST['ptpid']);
 				array_set_path($a_ppps, "{$pppid}/type", $_POST['type']);
 				array_set_path($a_ppps, "{$pppid}/if", $_POST['type'] . $_POST['ptpid']);
@@ -1406,6 +1409,9 @@ if ($_POST['apply']) {
 				array_set_path($wancfg, 'ipaddr', $_POST['type']);
 				break;
 			case "pppoe":
+				if (!isset($pppid)) {
+					break;
+				}
 				array_set_path($a_ppps, "{$pppid}/ptpid", $_POST['ptpid']);
 				array_set_path($a_ppps, "{$pppid}/type", $_POST['type']);
 				array_set_path($a_ppps, "{$pppid}/if", $_POST['type'] . $_POST['ptpid']);
@@ -1420,13 +1426,9 @@ if ($_POST['apply']) {
 				}
 				if (!empty($_POST['provider'])) {
 					array_set_path($a_ppps, "{$pppid}/provider", $_POST['provider']);
-				} else {
-					array_set_path($a_ppps, "{$pppid}/provider", true);
 				}
 				if (!empty($_POST['hostuniq'])) {
 					array_set_path($a_ppps, "{$pppid}/hostuniq", strtolower($_POST['hostuniq']));
-				} else {
-					array_set_path($a_ppps, "{$pppid}/hostuniq", true);
 				}
 				array_set_path($a_ppps, "{$pppid}/ondemand", ($_POST['pppoe_dialondemand'] ? true : false));
 
@@ -1451,6 +1453,9 @@ if ($_POST['apply']) {
 				break;
 			case "pptp":
 			case "l2tp":
+				if (!isset($pppid)) {
+					break;
+				}
 				array_set_path($a_ppps, "{$pppid}/ptpid", $_POST['ptpid']);
 				array_set_path($a_ppps, "{$pppid}/type", $_POST['type']);
 				array_set_path($a_ppps, "{$pppid}/if", $_POST['type'] . $_POST['ptpid']);
@@ -1931,7 +1936,7 @@ $shortcut_section = "interfaces";
 
 $types4 = ["ppp" => gettext("PPP"), "pppoe" => gettext("PPPoE"), "pptp" => gettext("PPTP"), "l2tp" => gettext("L2TP")];
 
-if (!in_array(array_get_path($pconfig, 'type'), ["ppp", "pppoe", "pptp", "l2tp"]) ||
+if (!isset($pppid) ||!in_array(array_get_path($pconfig, 'type'), ["ppp", "pppoe", "pptp", "l2tp"]) ||
     !array_intersect_key(explode(",", array_get_path($a_ppps, "{$pppid}/ports", "")), get_configured_interface_list_by_realif())) {
 	$types4 = array_merge(["none" => gettext("None"), "staticv4" => gettext("Static IPv4"), "dhcp" => gettext("DHCP")], $types4);
 }
@@ -3628,7 +3633,7 @@ $form->addGlobal(new Form_Input(
 	$if
 ));
 
-if (array_get_path($wancfg, 'if') == array_get_path($a_ppps, "{$pppid}/if")) {
+if (isset($pppid) && array_get_path($wancfg, 'if') == array_get_path($a_ppps, "{$pppid}/if")) {
 	$form->addGlobal(new Form_Input(
 		'ppp_port',
 		null,
@@ -3707,6 +3712,9 @@ print($form);
 <script type="text/javascript">
 //<![CDATA[
 events.push(function() {
+	// if_pppoe options.
+	var if_pppoetype = <?php if (config_path_enabled('system', 'use_if_pppoe')) { echo 'true'; } else { echo 'false'; } ?>;
+
 	function updateType(t) {
 
 		switch (t) {
@@ -3733,6 +3741,17 @@ events.push(function() {
 			}
 			case "pppoe": {
 				$('.dhcpadvanced, .none, .staticv4, .dhcp, .pptp, .ppp').hide();
+				if (if_pppoetype) {
+					hideInput('hostuniq', true);
+					hideCheckbox('pppoe_dialondemand', true);
+					setRequired('pppoe_idletimeout', false);
+					hideSelect('pppoe_idletimeout', true);
+					show_reset_settings();
+					hideSelect('pppoe-reset-type', true);
+				} else {
+					show_reset_settings($('#pppoe-reset-type').val());
+					setPPPoEDialOnDemandItems();
+				}
 				break;
 			}
 			case "l2tp": {
@@ -4152,12 +4171,10 @@ events.push(function() {
 
 	updateType($('#type').val());
 	updateTypeSix($('#type6').val());
-	show_reset_settings($('#pppoe-reset-type').val());
 	hideClass('dhcp6advanced', true);
 	hideClass('dhcpadvanced', true);
 	show_dhcp6adv();
 	setDHCPoptions();
-	setPPPoEDialOnDemandItems();
 	setPPTPDialOnDemandItems();
 	show_wpaoptions();
 	updatewifistandard($('#standard').val());

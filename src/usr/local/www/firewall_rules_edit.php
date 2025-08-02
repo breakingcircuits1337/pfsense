@@ -335,8 +335,7 @@ if (count($ostypes) > 2) {
 
 $ifdisp = get_configured_interface_with_descr();
 
-filter_rules_sort();
-$a_filter = config_get_path('filter/rule', []);
+$a_filter = get_filter_rules_list();
 
 if (isset($_REQUEST['id']) && is_numericint($_REQUEST['id'])) {
 	$id = $_REQUEST['id'];
@@ -1259,20 +1258,25 @@ if ($_POST['save']) {
 		pfSense_handle_custom_code("/usr/local/pkg/firewall_rules/pre_write_config");
 
 		if (isset($id) && $a_filter[$id]) {
-			$tmpif = $filterent['interface'];
+			if (isset($pconfig['floating'])) {
+				$tmpif = 'FloatingRules';
+			} else {
+				$tmpif = $filterent['interface'];
+			}
+			// Keep rule labels.
+			set_labels_for_rule_item($filterent, get_label_items_from_rule_item($a_filter[$id]));
+			if (isset($a_filter[$id]['force_category'])) {
+				// Keep filter category override.
+				$filterent['force_category'] = $a_filter[$id]['force_category'];
+			}
 			if (($tmpif == $if) || isset($pconfig['floating'])) {
-				$a_filter[$id] = $filterent;
+				add_filter_rules([$filterent], $id, true);
 			} else {							// rule moved to different interface
-				// update the previous interface's separators
-				$a_separators = config_get_path('filter/separator/' . strtolower($if), []);
-				$ridx = get_interface_ruleindex($if, $id);
-				shift_separators($a_separators, $ridx['index'], true);
-				config_set_path('filter/separator/' . strtolower($if), $a_separators);
+				// remove the rule from the previous interface
+				remove_filter_rules($id, $if);
 
-				// remove the rule from the previous interface and place it at the bottom of the new interface
-				unset($a_filter[$id]);
-				$ridx = get_interface_ruleindex($tmpif);
-				array_splice($a_filter, $ridx['last']+1, 0, array($filterent));
+				// add the new rule at the end of the new interface
+				add_filter_rules([$filterent]);
 			}
 
 		} else {
@@ -1287,28 +1291,21 @@ if ($_POST['save']) {
 				$tmpif = $if;
 			}
 
-			$ridx = get_interface_ruleindex($tmpif, $after);
 			if (is_numeric($after) && ($tmpif == $if || (isset($pconfig['floating'])))) {
 				// shift the separators and insert the rule
-				$a_separators = config_get_path('filter/separator/' . strtolower($tmpif), []);
 				if ($after == -1) {
 					// rule is being placed on top
-					shift_separators($a_separators, -1);
-					array_splice($a_filter, $ridx['first'], 0, array($filterent));
+					add_filter_rules([$filterent], -1);
 				} else {
 					// rule is being placed after another rule
-					shift_separators($a_separators, $ridx['index']);
-					array_splice($a_filter, $after+1, 0, array($filterent));
+					add_filter_rules([$filterent], $after);
 				}
-				config_set_path('filter/separator/' . strtolower($tmpif), $a_separators);
 			} else {
 				// rule is being added at the end or copied to a different interface; place it at the bottom
-				array_splice($a_filter, $ridx['last']+1, 0, array($filterent));
+				add_filter_rules([$filterent]);
 			}
 		}
 
-		config_set_path('filter/rule', $a_filter);
-		filter_rules_sort();
 		if (write_config(gettext("Firewall: Rules - saved/edited a firewall rule."))) {
 			mark_subsystem_dirty('filter');
 		}
@@ -1470,7 +1467,7 @@ $edit_disabled = isset($pconfig['associated-rule-id']);
 
 if ($edit_disabled) {
 	$extra = '';
-	foreach (config_get_path('nat/rule', []) as $index => $nat_rule) {
+	foreach (get_anynat_rules_list('rdr') as $index => $nat_rule) {
 		if ($nat_rule['associated-rule-id'] === $pconfig['associated-rule-id']) {
 			$extra = '<br/><a href="firewall_nat_edit.php?id='. $index .'">'. gettext('View the NAT rule') .'</a>';
 		}
@@ -2031,6 +2028,11 @@ events.push(function() {
 	var editenabled = 1;
 	var srcportsvisible = false;
 
+	var allowopts_state_without_igmp = false;
+	if ($('#proto option:selected').val() != "igmp") {
+		var allowopts_state_without_igmp = $('#allowopts').prop('checked');
+	}
+
 	// Show advanced additional opts options ======================================================
 	var showadvopts = false;
 
@@ -2039,8 +2041,11 @@ events.push(function() {
 
 	function show_advopts(ispageload) {
 		var text;
-		// On page load decide the initial state based on the data.
-		if (ispageload) {
+		if ($('#allowopts').prop('checked')) {
+			// Always show advanced options when Allow IP options is checked.
+			showadvopts = true;
+		} else if (ispageload) {
+			// On page load decide the initial state based on the data.
 			showadvopts = <?php if (is_aoadv_used($pconfig)) {echo 'true';} else {echo 'false';} ?>;
 		} else {
 			// It was a click, swap the state.
@@ -2357,6 +2362,18 @@ events.push(function() {
 
 	$('#proto').on('change', function() {
 		proto_change();
+		if ($('#proto option:selected').val() == "igmp") {
+			$('#allowopts').prop('checked', true);
+		} else {
+			$('#allowopts').prop('checked', allowopts_state_without_igmp);
+		}
+		show_advopts(true);
+	});
+
+	$('#allowopts').on('change', function() {
+		if ($('#proto option:selected').val() != "igmp") {
+			allowopts_state_without_igmp = $('#allowopts').prop('checked');
+		}
 	});
 
 	$('#icmptype\\[\\]').on('change', function() {

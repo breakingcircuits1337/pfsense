@@ -27,8 +27,8 @@
 
 require_once('services_dhcp.inc');
 
-define('DYNDNS_PROVIDER_VALUES', 'all-inkl azure azurev6 citynetwork cloudflare cloudflare-v6 cloudns custom custom-v6 desec desec-v6 digitalocean digitalocean-v6 dnsexit dnsimple dnsimple-v6 dnsmadeeasy dnsomatic domeneshop domeneshop-v6 dreamhost dreamhost-v6 duiadns duiadns-v6 dyfi dyndns dyndns-custom dyndns-static dyns dynv6 dynv6-v6 easydns easydns-v6 eurodns freedns freedns-v6 freedns2 freedns2-v6 glesys gandi-livedns gandi-livedns-v6 godaddy godaddy-v6 googledomains gratisdns he-net he-net-v6 he-net-tunnelbroker hover linode linode-v6 loopia mythicbeasts mythicbeasts-v6 name.com name.com-v6 namecheap nicru nicru-v6 noip noip-v6 noip-free noip-free-v6 onecom onecom-v6 ods opendns ovh-dynhost route53 route53-v6 selfhost spdyn spdyn-v6 strato yandex yandex-v6 zoneedit porkbun porkbun-v6');
-define('DYNDNS_PROVIDER_DESCRIPTIONS', 'All-Inkl.com,Azure DNS,Azure DNS (v6),City Network,Cloudflare,Cloudflare (v6),ClouDNS,Custom,Custom (v6),deSEC,deSEC (v6),DigitalOcean,DigitalOcean (v6),DNSexit,DNSimple,DNSimple (v6),DNS Made Easy,DNS-O-Matic,Domeneshop,Domeneshop (v6),DreamHost,Dreamhost (v6),DuiaDns.net,DuiaDns.net (v6),DY.fi,DynDNS (dynamic),DynDNS (custom),DynDNS (static),DyNS,Dynv6,Dynv6 (v6),easyDNS,easyDNS (v6),Euro Dns,freeDNS,freeDNS (v6),freeDNS API Version 2, freeDNS API Version 2 (v6),GleSYS,Gandi LiveDNS,Gandi LiveDNS (v6),GoDaddy,GoDaddy (v6),Google Domains,GratisDNS,HE.net,HE.net (v6),HE.net Tunnelbroker,Hover,Linode,Linode (v6),Loopia,Mythic Beasts,Mythic Beasts (v6),Name.com,Name.com (v6),Namecheap,NIC.RU,NIC.RU (v6),No-IP,No-IP (v6),No-IP (free),No-IP (free-v6),One.com,One.com (v6),ODS.org,OpenDNS,OVH DynHOST,Route 53,Route 53 (v6),SelfHost,SPDYN,SPDYN (v6),Strato,Yandex,Yandex (v6),ZoneEdit,Porkbun,Porkbun (v6)');
+define('DYNDNS_PROVIDER_VALUES', 'all-inkl azure azurev6 citynetwork cloudflare cloudflare-v6 cloudns custom custom-v6 desec desec-v6 digitalocean digitalocean-v6 dnsexit dnsimple dnsimple-v6 dnsmadeeasy dnsomatic domeneshop domeneshop-v6 dreamhost dreamhost-v6 duiadns duiadns-v6 dyfi dyndns dyndns-custom dyndns-static dyns dynv6 dynv6-v6 easydns easydns-v6 eurodns freedns freedns-v6 freedns2 freedns2-v6 glesys gandi-livedns gandi-livedns-v6 godaddy godaddy-v6 googledomains gratisdns he-net he-net-v6 he-net-tunnelbroker hover linode linode-v6 loopia luadns luadns-v6 mythicbeasts mythicbeasts-v6 name.com name.com-v6 namecheap nicru nicru-v6 noip noip-v6 noip-free noip-free-v6 onecom onecom-v6 ods opendns ovh-dynhost route53 route53-v6 selfhost spdyn spdyn-v6 strato yandex yandex-v6 zoneedit porkbun porkbun-v6');
+define('DYNDNS_PROVIDER_DESCRIPTIONS', 'All-Inkl.com,Azure DNS,Azure DNS (v6),City Network,Cloudflare,Cloudflare (v6),ClouDNS,Custom,Custom (v6),deSEC,deSEC (v6),DigitalOcean,DigitalOcean (v6),DNSexit,DNSimple,DNSimple (v6),DNS Made Easy,DNS-O-Matic,Domeneshop,Domeneshop (v6),DreamHost,Dreamhost (v6),DuiaDns.net,DuiaDns.net (v6),DY.fi,DynDNS (dynamic),DynDNS (custom),DynDNS (static),DyNS,Dynv6,Dynv6 (v6),easyDNS,easyDNS (v6),Euro Dns,freeDNS,freeDNS (v6),freeDNS API Version 2, freeDNS API Version 2 (v6),GleSYS,Gandi LiveDNS,Gandi LiveDNS (v6),GoDaddy,GoDaddy (v6),Google Domains,GratisDNS,HE.net,HE.net (v6),HE.net Tunnelbroker,Hover,Linode,Linode (v6),Loopia,LuaDNS,LuaDNS (v6),Mythic Beasts,Mythic Beasts (v6),Name.com,Name.com (v6),Namecheap,NIC.RU,NIC.RU (v6),No-IP,No-IP (v6),No-IP (free),No-IP (free-v6),One.com,One.com (v6),ODS.org,OpenDNS,OVH DynHOST,Route 53,Route 53 (v6),SelfHost,SPDYN,SPDYN (v6),Strato,Yandex,Yandex (v6),ZoneEdit,Porkbun,Porkbun (v6)');
 
 /* implement ipv6 route advertising daemon */
 function services_radvd_configure($blacklist = array()) {
@@ -518,13 +518,18 @@ function kea_is_hexstring(string $string): bool {
     return false;
 }
 
-function services_kea6_configure() {
+function services_kea6_configure(bool $with_custom = true) {
+	$has_custom = false;
 	$kea_var_run = g_get('varrun_path') . '/kea';
-	$kea_var_lib = '/var/lib/kea';
 	$kea_var_db = '/var/db/kea';
 
-	$kea6socket = g_get('varrun_path') . '/kea6-ctrl-socket';
+	$kea_lease_db = $kea_var_db . '/dhcp6.leases';
+
+	$kea6socket = $kea_var_run . '/kea6-ctrl-socket';
+	unlink_if_exists($kea6socket);
 	unlink_if_exists($kea6socket . '.lock');
+
+	$keaconf_path = '/usr/local/etc/kea/kea-dhcp6.conf';
 
 	if (g_get('services_dhcp_server_enable') == false) {
 		return;
@@ -551,9 +556,12 @@ function services_kea6_configure() {
 		return 0;
 	}
 
-	foreach ([$kea_var_run, $kea_var_lib, $kea_var_db] as $path) {
+	/* Kea 2.6.3 requires some additional path hardening (750) */
+	foreach ([$kea_var_run, $kea_var_db] as $path) {
 		if (!file_exists($path)) {
-			mkdir($path, 0777, true);
+			mkdir($path, 0750, true);
+		} else {
+			chmod($path, 0750);
 		}
 	}
 
@@ -575,17 +583,21 @@ function services_kea6_configure() {
 		'lease-database' => [
 			'type' => 'memfile',
 			'persist' => true,
-			'name' => '/var/lib/kea/dhcp6.leases'
+			'name' => $kea_lease_db
 		],
 		'loggers' => [[
 			'name' => 'kea-dhcp6',
 			'output_options' => [[
 				'output' => 'syslog'
 			]],
-			'severity' => 'INFO'
+			'severity' => config_get_path('kea6/loglevel', 'WARN')
 		]],
 		'valid-lifetime' => 7200,
 		'max-valid-lifetime' => 86400,
+		'host-reservation-identifiers' => [ /* order of priority */
+			'hw-address',
+			'duid'
+		],
 		'hooks-libraries' => [],
 		'control-socket' => [
 			'socket-type' => 'unix',
@@ -697,6 +709,107 @@ function services_kea6_configure() {
 		];
 
 		$keaconf['Dhcp6']['hooks-libraries'][] = $kea_ha_hook;
+	}
+
+	/* Store DHCP response options in the lease database */
+	$lease_options = '/usr/local/lib/kea/hooks/libdhcp_lease_options.so';
+	if (file_exists($lease_options)) {
+		$keaconf['Dhcp6']['hooks-libraries'][] = [
+			'library' => $lease_options,
+		];
+	}
+
+	$run_scriptd_base = g_get('conf_path') . '/kea6_scripts.d';
+	safe_mkdir($run_scriptd_base);
+
+	// Install kea2unbound hook
+	$run_script_path = $run_scriptd_base . '/kea2unbound.sh';
+
+	$base_bin = '/usr/local/bin/kea2unbound';
+	$base_args = implode(' ', [
+		'--kea-conf', $keaconf_path,
+		'--unbound-conf', g_get('unbound_chroot_path') . '/unbound.conf',
+		'--include-file', g_get('unbound_chroot_path') . '/leases/leases6.conf'
+	]);
+
+	$sync_args = implode(' ', array_map(function($v) {
+		return ("--subnet-id {$v}");
+	}, array_keys(kea6_dnsreg_enabled_ids())));
+
+	$run_script =<<<EOD
+#!/bin/sh
+# Automatically generated! DO NOT EDIT!
+
+case "$1" in
+	hook_load)
+		;&
+	lease6_add)
+		;&
+	lease6_delete)
+		;&
+	lease6_update)
+		{$base_bin} {$base_args} sync {$sync_args}
+		;;
+esac
+EOD;
+
+	/* Compute hash of script file */
+	$run_script_hash = '';
+	if (file_exists($run_script_path)) {
+		$run_script_hash = hash_file('xxh3', $run_script_path);
+	}
+	/* Only need to (re)write script on-disk if it has changed */
+	if (!hash_equals($run_script_hash, hash('xxh3', $run_script))) {
+		file_put_contents($run_script_path, $run_script);
+		chmod($run_script_path, 0755);
+	}
+
+	// Install kea2fib6 hook
+	$run_script_path = $run_scriptd_base . '/kea2fib6.sh';
+
+	$base_bin = '/usr/local/bin/kea2fib6';
+	$base_args = implode(' ', [
+		'--kea-conf', $keaconf_path,
+		'--cache-file', g_get('varrun_path').'/kea2fib6.cache'
+	]);
+
+	$run_script =<<<EOD
+#!/bin/sh
+# Automatically generated! DO NOT EDIT!
+
+case "$1" in
+	hook_load)
+		;&
+	lease6_add)
+		;&
+	lease6_delete)
+		;&
+	lease6_update)
+		{$base_bin} {$base_args} sync
+		;;
+esac
+EOD;
+
+	/* Compute hash of script file */
+	$run_script_hash = '';
+	if (file_exists($run_script_path)) {
+		$run_script_hash = hash_file('xxh3', $run_script_path);
+	}
+	/* Only need to (re)write script on-disk if it has changed */
+	if (!hash_equals($run_script_hash, hash('xxh3', $run_script))) {
+		file_put_contents($run_script_path, $run_script);
+		chmod($run_script_path, 0755);
+	}
+
+	$run_script_main = '/usr/local/bin/kea_run6';
+	if (file_exists($run_script_main)) {
+		$keaconf['Dhcp6']['hooks-libraries'][] = [
+			'library' => '/usr/local/lib/kea/hooks/libdhcp_run_script.so',
+			'parameters' => [
+				'name' => $run_script_main,
+				'sync' => false
+			]
+		];
 	}
 
 	$dhcpdv6ifs = array();
@@ -977,6 +1090,15 @@ kea6_skip_first_pool_options:
 				'test' => $pool_client_class_test
 			];
 
+			/* Merge custom Kea config */
+			if ($with_custom && !$first_pool) {
+				if (!empty($poolconf['custom_kea_config'])) {
+					$has_custom = true;
+					$keapool = array_merge_override_recursive(
+						$keapool, json_decode(base64_decode($poolconf['custom_kea_config']), true));
+				}
+			}
+
 			$keasubnet['pools'][] = $keapool;
 		}
 
@@ -1002,10 +1124,26 @@ kea6_skip_first_pool_options:
 					$keares['ip-addresses'][] = $ipaddrv6;
 				}
 
+				if ($sm['pdprefix']) {
+					if (isset($dhcpv6ifconf['pdprefix'])) {
+						$pdprefix = $sm['pdprefix'];
+						$keares['prefixes'][] = $pdprefix;
+					}
+				}
+
 				if ($sm['hostname']) {
 					$dhhostname = str_replace(" ", "_", $sm['hostname']);
 					$dhhostname = str_replace(".", "_", $dhhostname);
 					$keares['hostname'] = $dhhostname;
+				}
+
+				/* Merge custom Kea config */
+				if ($with_custom) {
+					if (!empty($sm['custom_kea_config'])) {
+						$has_custom = true;
+						$keares = array_merge_override_recursive(
+							$keares, json_decode(base64_decode($sm['custom_kea_config']), true));
+					}
 				}
 
 				$keasubnet['reservations'][] = $keares;
@@ -1044,6 +1182,15 @@ kea6_skip_first_pool_options:
 		}
 		$keasubnet['reservations-in-subnet'] = true;
 
+		/* Merge custom Kea config */
+		if ($with_custom) {
+			if (!empty($dhcpv6ifconf['custom_kea_config'])) {
+				$has_custom = true;
+				$keasubnet = array_merge_override_recursive(
+					$keasubnet, json_decode(base64_decode($dhcpv6ifconf['custom_kea_config']), true));
+			}
+		}
+
 		$keaconf['Dhcp6']['subnet6'][] = $keasubnet;
 	}
 
@@ -1054,7 +1201,12 @@ kea6_skip_first_pool_options:
 		];
 	}
 
-	$keaconf_path = '/usr/local/etc/kea/kea-dhcp6.conf';
+	if ($with_custom) {
+		if (config_path_enabled('kea6', 'custom_kea_config')) {
+			$keaconf = array_merge_override_recursive(
+				$keaconf, ['Dhcp6' => json_decode(base64_decode(config_get_path('kea6/custom_kea_config')), true)]);
+		}
+	}
 
 	/* render kea-dhcp6.conf json */
 	if (($keaconf = json_encode($keaconf, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)) === false) {
@@ -1069,13 +1221,29 @@ kea6_skip_first_pool_options:
 	}
 
 	/* create an empty leases database */
-	$kea_lease_db = $kea_var_lib . '/dhcp6.leases';
 	if (!file_exists($kea_lease_db)) {
 		touch($kea_lease_db);
 	}
 
 	$kea_bin = '/usr/local/sbin/kea-dhcp6';
-	mwexec_bg(sprintf('%s -c %s', $kea_bin, $keaconf_path));
+
+	/* lint/test kea-dhcp6 */
+	if ($with_custom && $has_custom) {
+		$retval = mwexec(implode(' ', [
+			$kea_bin,
+			'-t', $keaconf_path
+		]));
+		if ($retval <> 0) {
+			/* Try again without any custom configuration */
+			file_notice('DHCP', gettext('Failed to start DHCPv6 Server with custom configurations. See Status > System Logs for more information about this failure.'));
+			return (services_kea6_configure(false));
+		}
+	}
+
+	mwexec_bg(implode(' ',[
+		$kea_bin,
+		'-c', $keaconf_path
+	]));
 
 	if (is_platform_booting()) {
 		print gettext('done') . ".\n";
@@ -1142,7 +1310,7 @@ function services_dhcpd_configure($family = "all") {
 	if (($family === 'all') || ($family === 'inet')) {
 		switch (dhcp_get_backend()) {
 		case 'kea':
-			services_kea4_configure();
+			services_kea4_configure(true);
 			break;
 		case 'isc':
 		default:
@@ -1154,7 +1322,7 @@ function services_dhcpd_configure($family = "all") {
 	if (($family === 'all') || ($family === 'inet6')) {
 		switch (dhcp_get_backend()) {
 		case 'kea':
-			services_kea6_configure();
+			services_kea6_configure(true);
 			break;
 		case 'isc':
 		default:
@@ -1167,15 +1335,21 @@ function services_dhcpd_configure($family = "all") {
 	unlock($dhcpdconfigurelck);
 }
 
-function services_kea4_configure() {
+function services_kea4_configure(bool $with_custom = true) {
+	$has_custom = false;
 	$need_ddns_updates = false;
 	$ddns_zones = array();
 
 	$kea_var_run = g_get('varrun_path') . '/kea';
-	$kea_var_lib = '/var/lib/kea';
+	$kea_var_db = '/var/db/kea';
 
-	$kea4socket = g_get('varrun_path').'/kea4-ctrl-socket';
+	$kea_lease_db = $kea_var_db . '/dhcp4.leases';
+
+	$kea4socket = $kea_var_run . '/kea4-ctrl-socket';
+	unlink_if_exists($kea4socket);
 	unlink_if_exists($kea4socket . '.lock');
+
+	$keaconf_path = '/usr/local/etc/kea/kea-dhcp4.conf';
 
 	if (g_get('services_dhcp_server_enable') == false) {
 		return;
@@ -1196,14 +1370,12 @@ function services_kea4_configure() {
 		return 0;
 	}
 
-	/* ensure we have a valid /var/run/kea directory */
-	if (!file_exists($kea_var_run)) {
-		mkdir($kea_var_run, 0777, true);
-	}
-
-	/* ensure we have a valid /var/lib/kea directory */
-	if (!file_exists($kea_var_lib)) {
-		mkdir($kea_var_lib, 0777, true);
+	foreach ([$kea_var_run, $kea_var_db] as $path) {
+		if (!file_exists($path)) {
+			mkdir($path, 0750, true);
+		} else {
+			chmod($path, 0750);
+		}
 	}
 
 	$syscfg = config_get_path('system');
@@ -1219,18 +1391,23 @@ function services_kea4_configure() {
 		'lease-database' => [
 			'type' => 'memfile',
 			'persist' => true,
-			'name' => $kea_var_lib . '/dhcp4.leases'
+			'name' => $kea_lease_db
 		],
 		'loggers' => [[
 			'name' => 'kea-dhcp4',
 			'output_options' => [[
 				'output' => 'syslog'
 			]],
-			'severity' => 'INFO'
+			'severity' => config_get_path('kea/loglevel', 'WARN')
 		]],
 		'valid-lifetime' => 7200,
 		'max-valid-lifetime' => 86400,
 		'ip-reservations-unique' => false,
+		'host-reservation-identifiers' => [ /* order of priority */
+			'hw-address',
+			'client-id',
+			'duid'
+		],
 		'echo-client-id' => false, /* RFC6842 compatibility mode */
 		'option-data' => [[
 			'name' => 'domain-name',
@@ -1353,6 +1530,68 @@ function services_kea4_configure() {
 		];
 
 		$keaconf['Dhcp4']['hooks-libraries'][] = $kea_ha_hook;
+	}
+
+	/* Store DHCP response options in the lease database */
+	$lease_options = '/usr/local/lib/kea/hooks/libdhcp_lease_options.so';
+	if (file_exists($lease_options)) {
+		$keaconf['Dhcp4']['hooks-libraries'][] = [
+			'library' => $lease_options,
+		];
+	}
+
+	$run_scriptd_base = g_get('conf_path') . '/kea4_scripts.d';
+	safe_mkdir($run_scriptd_base);
+	$run_script_path = $run_scriptd_base . '/kea2unbound.sh';
+
+	$base_bin = '/usr/local/bin/kea2unbound';
+	$base_args = implode(' ', [
+		'--kea-conf', $keaconf_path,
+		'--unbound-conf', g_get('unbound_chroot_path') . '/unbound.conf',
+		'--include-file', g_get('unbound_chroot_path') . '/leases/leases4.conf'
+	]);
+
+	$sync_args = implode(' ', array_map(function($v) {
+		return ("--subnet-id {$v}");
+	}, array_keys(kea_dnsreg_enabled_ids())));
+
+		$run_script =<<<EOD
+#!/bin/sh
+# Automatically generated! DO NOT EDIT!
+
+case "$1" in
+	hook_load)
+		;&
+	lease4_add)
+		;&
+	lease4_delete)
+		;&
+	lease4_update)
+		{$base_bin} {$base_args} sync {$sync_args}
+		;;
+esac
+EOD;
+
+	/* Compute hash of script file */
+	$run_script_hash = null;
+	if (file_exists($run_script_path)) {
+		$run_script_hash = hash_file('xxh3', $run_script_path);
+	}
+	/* Only need to (re)write script on-disk if it has changed */
+	if (hash('xxh3', $run_script) !== $run_script_hash) {
+		file_put_contents($run_script_path, $run_script);
+		chmod($run_script_path, 0755);
+	}
+
+	$run_script_main = '/usr/local/bin/kea_run4';
+	if (file_exists($run_script_main)) {
+		$keaconf['Dhcp4']['hooks-libraries'][] = [
+			'library' => '/usr/local/lib/kea/hooks/libdhcp_run_script.so',
+			'parameters' => [
+				'name' => $run_script_main,
+				'sync' => false
+			]
+		];
 	}
 
 	/* Only consider DNS servers with IPv4 addresses for the IPv4 DHCP server. */
@@ -1503,6 +1742,7 @@ function services_kea4_configure() {
 		}
 
 		// Setup pool options
+		$first_pool = true;
 		foreach ($all_pools as $all_pools_idx => $poolconf) {
 			$keapool = [];
 
@@ -1647,6 +1887,7 @@ function services_kea4_configure() {
 			if (!empty($poolconf['tftp'])) {
 				$keapool['option-data'][] = [
 					'name' => 'tftp-server-name',
+					'code' => 66, /* See: https://redmine.pfsense.org/issues/15518 */
 					'data' => $poolconf['tftp']
 				];
 			}
@@ -1783,6 +2024,16 @@ function services_kea4_configure() {
 				'test' => $pool_client_class_test
 			];
 
+			/* Merge custom Kea config */
+			if ($with_custom && !$first_pool) {
+				if (!empty($poolconf['custom_kea_config'])) {
+					$has_custom = true;
+					$keapool = array_merge_override_recursive(
+						$keapool, json_decode(base64_decode($poolconf['custom_kea_config']), true));
+				}
+			}
+
+			$first_pool = false;
 			$keasubnet['pools'][] = $keapool;
 
 		}
@@ -2077,6 +2328,7 @@ function services_kea4_configure() {
 				if (!empty($sm['tftp']) && ($sm['tftp'] != $dhcpifconf['tftp'])) {
 					$keares['option-data'][] = [
 						'name' => 'tftp-server-name',
+						'code' => 66, /* See: https://redmine.pfsense.org/issues/15518 */
 						'data' => $sm['tftp']
 					];
 				}
@@ -2216,11 +2468,29 @@ function services_kea4_configure() {
 
 				$i++;
 
+				/* Merge custom Kea config */
+				if ($with_custom) {
+					if (!empty($sm['custom_kea_config'])) {
+						$has_custom = true;
+						$keares = array_merge_override_recursive(
+							$keares, json_decode(base64_decode($sm['custom_kea_config']), true));
+					}
+				}
+
 				$keasubnet['reservations'][] = $keares;
 			}
 		}
 
 		$keasubnet['reservations-in-subnet'] = true;
+
+		/* Merge custom Kea config */
+		if ($with_custom) {
+			if (!empty($dhcpifconf['custom_kea_config'])) {
+				$has_custom = true;
+				$keasubnet = array_merge_override_recursive(
+					$keasubnet, json_decode(base64_decode($dhcpifconf['custom_kea_config']), true));
+			}
+		}
 
 		$keaconf['Dhcp4']['subnet4'][] = $keasubnet;
 		$keaconf['Dhcp4']['interfaces-config']['interfaces'][] = get_real_interface($dhcpif);
@@ -2263,6 +2533,13 @@ function services_kea4_configure() {
 		];
 	}
 
+	if ($with_custom) {
+		if (config_path_enabled('kea', 'custom_kea_config')) {
+			$keaconf = array_merge_override_recursive(
+				$keaconf, ['Dhcp4' => json_decode(base64_decode(config_get_path('kea/custom_kea_config')), true)]);
+		}
+	}
+
 	/* render json */
 	if (($keaconf = json_encode($keaconf, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)) === false) {
 		log_error(sprintf(gettext('error: unable to render json for kea-dhcp4.conf in %s()'), __FUNCTION__));
@@ -2270,21 +2547,35 @@ function services_kea4_configure() {
 	}
 
 	/* write kea-dhcp4.conf */
-	$keaconf_path = '/usr/local/etc/kea/kea-dhcp4.conf';
 	if (!file_put_contents($keaconf_path, $keaconf)) {
 		log_error(sprintf(gettext('error: cannot open %s in %s()'), $keaconf_path, __FUNCTION__));
 		return 1;
 	}
 
 	/* create an empty leases database */
-	$kea_lease_db = $kea_var_lib . '/dhcp4.leases';
 	if (!file_exists($kea_lease_db)) {
 		touch($kea_lease_db);
 	}
 
-	/* start kea-dhcp4 */
 	$kea_bin = '/usr/local/sbin/kea-dhcp4';
-	mwexec_bg(sprintf('%s -c %s', $kea_bin, $keaconf_path));
+
+	/* lint/test kea-dhcp4 */
+	if ($with_custom && $has_custom) {
+		$retval = mwexec(implode(' ', [
+			$kea_bin,
+			'-t', $keaconf_path
+		]));
+		if ($retval <> 0) {
+			/* Try again without any custom configuration */
+			file_notice('DHCP', gettext('Failed to start DHCP Server with custom configurations. See Status > System Logs for more information about this failure.'));
+			return (services_kea4_configure(false));
+		}
+	}
+
+	mwexec_bg(implode(' ',[
+		$kea_bin,
+		'-c', $keaconf_path
+	]));
 
 	if (is_platform_booting()) {
 		print "done.\n";
@@ -4257,11 +4548,20 @@ function services_dyndns_configure($int = "") {
 /**
  * Get the source IPv4 or IPv6 address to use for sending a request.
  * @param string $interface A VIP ID, gateway group, or friendly name.
- * @param mixed $address_family Force an IP address family.
+ * @param mixed $address_family Force an IP address family. If not set,
+ *        the address returned is based on the system preference.
  * @return string|false The IP address to use; False otherwise.
  */
 function get_request_source_address($interface, int|null $address_family = null) {
 	$source_address = '';
+	$prefer_ipv4 = config_path_enabled('system', 'prefer_ipv4');
+	// Get the string equivalent for the functions that need it.
+	$address_family_string = match ($address_family) {
+		AF_INET => 'inet',
+		AF_INET6 => 'inet6',
+		// If the address family hasn't been specified, check the system preference.
+		default => $prefer_ipv4 ? 'inet' : 'inet6'
+	};
 
 	// Get the interface gateway.
 	$interface_gateway = '';
@@ -4271,10 +4571,10 @@ function get_request_source_address($interface, int|null $address_family = null)
 		$interface_gateway = $gateways_groups[$interface][0]['gw'];
 	} elseif (str_starts_with($interface, '_vip')) {
 		// Given interface is a VIP.
-		$interface_gateway = get_interface_gateway_name(get_root_interface($interface));
+		$interface_gateway = get_interface_gateway_name(get_root_interface($interface), $address_family_string);
 	} else {
 		// Given interface is a friendly name.
-		$interface_gateway = get_interface_gateway_name($interface);
+		$interface_gateway = get_interface_gateway_name($interface, $address_family_string);
 	}
 
 	if (!empty($interface_gateway)) {
@@ -4283,7 +4583,33 @@ function get_request_source_address($interface, int|null $address_family = null)
 		if (array_get_path($gateways_status, "{$interface_gateway}/status", '') != 'online') {
 			return false;
 		}
-		$source_address_gw = array_get_path($gateways_status, "{$interface_gateway}/srcip", '');
+
+		// Check for the gateway group VIP preference.
+		$use_vip = false;
+		$source_address_gw = array_get_path($gateways_groups, "{$interface}/0/vip", '');
+		if (!empty($source_address_gw)) {
+			$vip_carp_status = get_carp_bind_status($source_address_gw);
+			if (empty($vip_carp_status)) {
+				// IP alias VIP not on CARP parent.
+				$use_vip = true;
+			} elseif ($vip_carp_status == 'MASTER') {
+				// CARP VIP or IP alias on CARP parent
+				$use_vip = true;
+			}
+		}
+		if ($use_vip) {
+			$vip_list = get_configured_vip_list();
+			if (isset($vip_list[$source_address_gw])) {
+				$source_address_gw = $vip_list[$source_address_gw];
+			}
+		} else {
+			$source_address_gw = '';
+		}
+
+		if (empty($source_address_gw)) {
+			// Note: Gateway monitoring for IPv6 may be using a link-local address.
+			$source_address_gw = array_get_path($gateways_status, "{$interface_gateway}/srcip", '');
+		}
 
 		// If the address family hasn't been specified, base it on the gateway.
 		if (!isset($address_family)) {
@@ -4295,15 +4621,14 @@ function get_request_source_address($interface, int|null $address_family = null)
 	if ($address_family == AF_INET) {
 		$source_address = is_ipaddrv4($source_address_gw) ? $source_address_gw : get_interface_ip($interface);
 	} elseif ($address_family == AF_INET6) {
-		$source_address = is_ipaddrv6($source_address_gw) ? $source_address_gw : get_interface_ipv6($interface);
+		$source_address = (is_ipaddrv6($source_address_gw) && is_v6gua($source_address_gw)) ? $source_address_gw : get_interface_ipv6($interface);
 	} else {
-		$prefer_ipv4 = config_path_enabled('system', 'prefer_ipv4');
 		if ($prefer_ipv4) {
 			$source_address = is_ipaddrv4($source_address_gw) ? $source_address_gw : get_interface_ip($interface);
 		}
 		if (empty($source_address)) {
 			// Also check IPv6 if IPv4 is preferred but not available.
-			$source_address = is_ipaddrv6($source_address_gw) ? $source_address_gw : get_interface_ipv6($interface);
+			$source_address = (is_ipaddrv6($source_address_gw) && is_v6gua($source_address_gw)) ? $source_address_gw : get_interface_ipv6($interface);
 		}
 		if (empty($source_address) && !$prefer_ipv4) {
 			$source_address = is_ipaddrv4($source_address_gw) ? $source_address_gw : get_interface_ip($interface);

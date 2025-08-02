@@ -1895,9 +1895,17 @@ function interface_bring_down($interface = "wan", $destroy = false, $ifacecfg = 
 		case "pppoe":
 		case "pptp":
 		case "l2tp":
-			if (is_array($ppps) && count($ppps)) {
+			if (is_array($ppps) && count($ppps) > 0) {
 				foreach ($ppps as  $ppp) {
-					if ($realif == $ppp['if']) {
+					if ($realif != $ppp['if']) {
+						continue;
+					}
+					if (config_path_enabled('system', 'use_if_pppoe')) {
+						if (does_interface_exist($realif)) {
+							mwexec('/sbin/ifconfig ' . escapeshellarg($realif) . ' down', true);
+							pfSense_interface_destroy($realif);
+						}
+					} else {
 						if (isset($ppp['ondemand']) && !$destroy) {
 							send_event("interface reconfigure {$interface}");
 							break;
@@ -1907,8 +1915,8 @@ function interface_bring_down($interface = "wan", $destroy = false, $ifacecfg = 
 							sleep(2);
 						}
 						unlink_if_exists("{$g['varetc_path']}/mpd_{$interface}.conf");
-						break;
 					}
+					break;
 				}
 			}
 			break;
@@ -2081,9 +2089,15 @@ function interface_wait_tentative($interface, $timeout = 10) {
 }
 
 function interface_isppp_type($interface) {
-	$iface = config_get_path("interfaces/{$interface}");
-	if (!is_array($iface)) {
-		return false;
+	$iface = NULL;
+	/* Allow the caller to supply an interface from the config to avoid an additional lookup */
+	if (is_array($interface)) {
+		$iface = $interface;
+	} else {
+		$iface = config_get_path("interfaces/{$interface}");
+		if (!is_array($iface)) {
+			return false;
+		}
 	}
 
 	switch ($iface['ipaddr']) {
@@ -2244,6 +2258,79 @@ function restart_ppp_interfaces_using_interfaces($triggerinterfaces) {
 	}
 }
 
+function interface_pppoe_get_hostuniq($ppp) {
+	$hostuniq = '';
+
+	if (is_string($ppp['hostuniq']) && !empty($ppp['hostuniq'])) {
+		if (preg_match('/^0x[a-fA-F0-9]+$/', $ppp['hostuniq'])) {
+			$hostuniq = strtolower($ppp['hostuniq']) .'|';
+		} elseif (preg_match('/^[a-zA-Z0-9]+$/i', $ppp['hostuniq'])) {
+			$hostuniq = '0x' . bin2hex($ppp['hostuniq']) . '|';
+		}
+	}
+
+	return ($hostuniq);
+}
+
+/*
+ * This function configure PPPoE using if_pppoe kernel module
+ */
+function interface_pppoe_configure($ifcfg, $ppp) {
+
+	if (!is_module_loaded('if_pppoe.ko')) {
+		mwexec('/sbin/kldload if_pppoe.ko');
+	}
+	if (does_interface_exist($ifcfg['if'])) {
+		mwexec('/sbin/ifconfig ' . escapeshellarg($ifcfg['if']) . ' down', true);
+		pfSense_interface_destroy($ifcfg['if']);
+	}
+
+	$tmpiface = pfSense_interface_create2($ifcfg['if']);
+
+	if ($tmpiface != $ifcfg['if']) {
+		log_error(sprintf(gettext("Error creating PPPoE interface %s"),
+		    $ifcfg['if']));
+		return (0);
+	}
+
+	$defaultmtu = "1492";
+	if (!empty($ifcfg['mtu'])) {
+		$defaultmtu = intval($ifcfg['mtu']);
+	}
+	$pppmtu = (empty($ppp['mtu']) ? $defaultmtu : intval($ppp['mtu']));
+	$mtu = min($defaultmtu, $pppmtu);
+	$mtu = min($mtu, get_interface_mtu($ppp['ports']) - 8);
+
+	set_interface_mtu($ifcfg['if'], $mtu);
+
+	$hostuniq = interface_pppoe_get_hostuniq($ppp);
+	$provider = (isset($ppp['provider']) && is_string($ppp['provider']))? $ppp['provider'] : "";
+	$authkey = base64_decode($ppp['password']);
+
+	/*
+	 * FIXME debug is very noisy, we need to silence console and save logs
+	 * on proper place
+	 */
+	//exec("/sbin/ifconfig {$ifcfg['if']} debug");
+
+	$descr = isset($ifcfg['descr']) ? $ifcfg['descr'] : "";
+	exec("/sbin/ifconfig {$ifcfg['if']} descr \"{$descr}\"");
+
+	exec("/sbin/pppcfg {$ifcfg['if']} " .
+	    "pppoedev {$ppp['ports']} pppoesvc \"{$hostuniq}{$provider}\" " .
+	    "authname {$ppp['username']} authkey \"{$authkey}\" 2>&1",
+	    $out, $ret);
+
+	if ($ret != 0) {
+		log_error(sprintf(gettext("Error configuring PPPoE interface %s"),
+		    $ifcfg['if']));
+		return (0);
+	}
+
+	interfaces_bring_up($ppp['ports']);
+	interfaces_bring_up($ifcfg['if']);
+}
+
 /*
  * This function can configure PPPoE, MLPPP (PPPoE), PPTP.
  * It writes the mpd config file to /var/etc every time the link is opened.
@@ -2258,16 +2345,8 @@ function interface_ppps_configure($interface) {
 	}
 	$ifcfg = $iface;
 	if (!isset($ifcfg['enable'])) {
+		remove_pppoe_cron_items($ifcfg['if']);
 		return 0;
-	}
-
-	// mpd5 requires a /var/spool/lock directory for PPP modem links.
-	if (!is_dir("/var/spool/lock")) {
-		mkdir("/var/spool/lock", 0777, true);
-	}
-	// mpd5 modem chat script expected in the same directory as the mpd_xxx.conf files
-	if (!file_exists("{$g['varetc_path']}/mpd.script")) {
-		@symlink("/usr/local/sbin/mpd.script", "{$g['varetc_path']}/mpd.script");
 	}
 
 	$pppid = "";
@@ -2292,6 +2371,29 @@ function interface_ppps_configure($interface) {
 	}
 
 	$confports = array_filter(explode(',', $ppp['ports']));
+
+	if (config_path_enabled('system', 'use_if_pppoe') && $type == "pppoe") {
+		if (is_array($confports) && count($confports) > 1) {
+			log_error(sprintf(gettext("Error creating PPPoE interface %s.  MLPP is not supported by if_pppoe.  Aborting setup."),
+			    $ifcfg['if']));
+			return (0);
+		}
+		return interface_pppoe_configure($ifcfg, $ppp);
+	}
+
+	// mpd5 requires a /var/spool/lock directory for PPP modem links.
+	if (!is_dir("/var/spool/lock")) {
+		mkdir("/var/spool/lock", 0777, true);
+	}
+	/*
+	 * mpd5 modem chat script expected in the same directory as the
+	 * mpd_xxx.conf files
+	 */
+	if (!file_exists("{$g['varetc_path']}/mpd.script")) {
+		@symlink("/usr/local/sbin/mpd.script",
+		    "{$g['varetc_path']}/mpd.script");
+	}
+
 	if ($type == "modem") {
 		$ports = $confports;
 	} else {
@@ -2675,16 +2777,9 @@ EOD;
 EOD;
 		}
 		if ($type == "pppoe") {
-			$hostuniq = '';
-			if (!empty($ppp['hostuniq'])) {
-				if (preg_match('/^0x[a-fA-F0-9]+$/', $ppp['hostuniq'])) {
-					$hostuniq = strtolower($ppp['hostuniq']) .'|';
-				} elseif (preg_match('/^[a-zA-Z0-9]+$/i', $ppp['hostuniq'])) {
-					$hostuniq = '0x' . bin2hex($ppp['hostuniq']) . '|';
-				}
-			}
+			$hostuniq = interface_pppoe_get_hostuniq($ppp);
 			// Send a null service name if none is set.
-			$provider = isset($ppp['provider']) ? $ppp['provider'] : "";
+			$provider = (isset($ppp['provider']) && is_string($ppp['provider']))? $ppp['provider'] : "";
 			$mpdconf .= <<<EOD
 	set pppoe service "{$hostuniq}{$provider}"
 
@@ -3939,7 +4034,7 @@ function run_dhcp6client_process($interfaces, $debugOption, $noreleaseOption) {
 		    "-p {$g['varrun_path']}/dhcp6c.pid " .
 		    implode(' ', $interfaces));
 		log_error(sprintf(gettext(
-		    "Starting DHCP6 client for interfaces %s in DHCP6 without RA mode"),
+		    "Starting DHCP6 client for interfaces %s"),
 		    implode(',', $interfaces)));
 	}
 }
@@ -4305,7 +4400,7 @@ function interface_configure($interface = "wan", $reloadall = false, $linkupeven
 		case 'dhcp6':
 			// N.B. PPP connections using PPP as the IPv6 parent interface are excluded because the ppp-ipv6 script
 			// calls interface_dhcpv6_configure() for these connections after IPv6CP is up, whilst rc.newwanip
-			// handles all non-PPP connections with 'dhcp6usev4iface' set
+			// handles all non-PPP connections with 'dhcp6usev4iface' set.
 			log_error(gettext("calling interface_dhcpv6_configure."));
 			if ((($wancfg['ipaddrv6'] == 'dhcp6') && !isset($wancfg['dhcp6usev4iface'])) ||
 			    (($wancfg['ipaddrv6'] == 'slaac') && !isset($wancfg['slaacusev4iface'])) ||
@@ -4666,7 +4761,7 @@ function interface_6rd_configure($interface, $wancfg) {
 	mwexec("/sbin/ifconfig {$stfiface} inet6 {$rd6prefix}/{$rd6prefixlen}");
 	mwexec("/sbin/ifconfig {$stfiface} stfv4br " . escapeshellarg($wancfg['gateway-6rd']));
 	if ($wancfg['prefix-6rd-v4plen'] >= 0 && $wancfg['prefix-6rd-v4plen'] <= 32) {
-		mwexec("/sbin/ifconfig {$stfiface} stfv4net {$ip4address}/" . escapeshellarg($wancfg['prefix-6rd-v4plen']));
+		mwexec("/sbin/ifconfig {$stfiface} stfv4net {$ip4address}/" . escapeshellarg(($wancfg['prefix-6rd-v4plen'] > 0) ? $wancfg['prefix-6rd-v4plen'] : 32));
 	}
 	$parentmtu = get_interface_mtu(get_real_interface($interface));
 	if (isset($wancfg['mtu']) && ($wancfg['mtu'] >= 1300)) {
@@ -7616,7 +7711,7 @@ function get_interface_addresses($interface, $linklocal_fallback = false) {
 	if ($v4addrs) {
 		$v4addr = array_shift($v4addrs);
 		$ifaddrs['ipaddr'] = $v4addr['addr'];
-		foreach(array("subnetbits", "subnet", "broadcast", "tunnel") as $key) {
+		foreach(array("subnetbits", "subnet", "broadcast", "dstaddr") as $key) {
 			if (array_key_exists($key, $v4addr)) {
 				$ifaddrs[$key] = $v4addr[$key];
 			}
@@ -7773,7 +7868,13 @@ function get_interface_addresses($interface, $linklocal_fallback = false) {
 		foreach ($v6addrs as $addr) {
 			if ($addr['addr'] == $selected_address) {
 				$v6addr = $addr;
-				break;
+			}
+			// Always get the peer address
+			if (isset($addr['dstaddr'])) {
+				$ifaddrs['dstaddr6'] = $addr['dstaddr'];
+				if (is_linklocal($addr['dstaddr'])) {
+					$ifaddrs['dstaddr6'] .= "%{$interface}";
+				}
 			}
 		}
 
@@ -7783,10 +7884,8 @@ function get_interface_addresses($interface, $linklocal_fallback = false) {
 				$ifaddrs['ipaddr6'] .= "%{$interface}";
 			}
 	
-			foreach(array("subnetbits", "tunnel") as $key) {
-				if (array_key_exists($key, $v6addr)) {
-					$ifaddrs[$key.'6'] = $v6addr[$key];
-				}
+			if (array_key_exists('subnetbits', $v6addr)) {
+				$ifaddrs['subnetbits6'] = $v6addr['subnetbits'];
 			}
 	
 			$selected_address_flags = [];

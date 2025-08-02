@@ -61,7 +61,11 @@ if (isset($_GET['interface'])) {
 	$argument = trim($argv[1], " \n\t");
 }
 
-log_error("rc.newwanipv6: Info: starting on {$argument} due to {$reason}.");
+if (!empty($reason) && ($reason != 'RENEW')) {
+	log_error("rc.newwanipv6: Info: starting on {$argument} due to {$reason}.");
+} else {
+	log_error("rc.newwanipv6: Info: starting on {$argument}.");
+}
 
 if (empty($argument)) {
 	$interface = "wan";
@@ -93,6 +97,9 @@ if ((empty($curwanipv6) || !is_ipaddrv6($curwanipv6)) && substr($interface_real,
 	log_error("rc.newwanipv6: No IPv6 address found for interface {$interface_descr} [{$interface}].");
 	return;
 }
+
+$new_domain_name_servers_received = false;
+$new_searchdomains_received = false;
 
 if (isset($_GET['dmips'])) {
 	$new_domain_name_servers = $_GET['dmips'];
@@ -145,8 +152,6 @@ if (is_ipaddrv6($curwanipv6)) {
 	@file_put_contents(g_get('vardb_path') . "/{$interface_real}_ipv6", $curwanipv6);
 }
 
-log_error("rc.newwanipv6: on (IP address: {$curwanipv6}) (interface: {$interface}) (real interface: {$interface_real}).");
-
 $oldipv6 = '';
 if (file_exists(g_get('vardb_path') . "/{$interface_real}_cacheipv6")) {
 	$oldipv6 = file_get_contents(g_get('vardb_path') . "/{$interface_real}_cacheipv6");
@@ -172,12 +177,19 @@ if (($curwanipv6 == $oldipv6) && (substr($interface_real, 0, 4) != "ovpn")) {
 }
 
 /**
- * @var bool Used for only action when the DNS information changes.
+ * @var bool Used for only taking action when the DNS information changes.
  */
-$dns_changed = true;
-if (($new_domain_name_servers_received === false) && ($new_searchdomains_received === false)) {
-	$dns_changed = false;
+$dns_changed = (($reason == 'RENEW') && ($new_domain_name_servers_received || $new_searchdomains_received));
+
+// Only continue on RENEW if there has been a change.
+if (($reason == 'RENEW') && !$address_replaced && !$dns_changed) {
+	return;
 }
+
+if ($reason == 'RENEW') {
+	log_error("rc.newwanipv6: Info: received {$reason} on {$argument} (previous IP address: {$oldipv6}).");
+}
+log_error("rc.newwanipv6: on (IP address: {$curwanipv6}) (interface: {$interface}) (real interface: {$interface_real}).");
 
 if (($reason != 'RENEW') || $address_replaced) {
 	$grouptmp = link_interface_to_group($interface);
@@ -191,11 +203,6 @@ if (($reason != 'RENEW') || $address_replaced) {
 if (($reason != 'RENEW') || $dns_changed) {
 	/* regenerate resolv.conf if DNS overrides are allowed */
 	system_resolvconf_generate(true);
-}
-
-// Only continue on RENEW if there has been an address change.
-if (($reason == 'RENEW') && !$address_replaced) {
-	return;
 }
 
 /* reconfigure our gateway monitor, dpinger results need to be 
