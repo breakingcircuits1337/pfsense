@@ -146,7 +146,16 @@ while ($running) {
         $lines = tail_log($log, $inode[$log], $pos[$log]);
         foreach ($lines as $line) {
             $ip = parse_ip($line);
-            if (!$ip || is_blocked($ip) || isset($lru[$ip])) continue;
+            // Extract interface and rule #
+            $fields = explode(',', $line);
+            $if = isset($fields[3]) ? trim($fields[3]) : null;
+            $rule = null;
+            foreach ($fields as $f) {
+                if (is_numeric($f) && intval($f) >= 1000000000) { $rule = trim($f); break; }
+            }
+            // Determine policy
+            $policy = \ProviderGemini::get_ai_policy($if, $rule);
+            if (!$ip || is_blocked($ip) || isset($lru[$ip]) || !$policy['enabled']) continue;
             lru_cache($lru, $ip, 5000);
             $prompt = 'You are a network security expert. Evaluate the following log line. If it indicates malicious or suspicious activity return exactly JSON {"action":"block","reason":"<short>","confidence":0.95}. Otherwise return JSON {"action":"ignore"}. Log line: ' . $line;
             try {
@@ -155,9 +164,9 @@ while ($running) {
                 $reply = $provider->send_chat([$prompt]);
                 $json = json_decode(trim($reply), true);
                 $confidence = isset($json['confidence']) ? floatval($json['confidence']) : 1.0;
-                if (isset($json['action']) && $json['action'] === 'block' && !empty($json['reason']) && $confidence >= floatval($threshold)) {
+                if (isset($json['action']) && $json['action'] === 'block' && !empty($json['reason']) && $confidence >= floatval($policy['threshold'])) {
                     pfctl_block($ip);
-                    blocklist_add($ip, $json['reason'], $block_ttl);
+                    blocklist_add($ip, $json['reason'], $policy['ttl']);
                     syslog_notice("AI blocked $ip: " . $json['reason']);
                     ai_event_log("block", $ip, $json['reason']);
                 }

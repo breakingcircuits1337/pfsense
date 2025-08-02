@@ -29,6 +29,37 @@ abstract class AIProvider {
         }
         return $node;
     }
+
+    // Returns: [ 'enabled'=>bool, 'threshold'=>float, 'ttl'=>int ]
+    public static function get_ai_policy($if = null, $rule = null) {
+        global $config;
+        $mon = $config['system']['ai']['monitor'] ?? [];
+        $res = [
+            'enabled' => true,
+            'threshold' => isset($mon['threshold']) ? floatval($mon['threshold']) : 0.7,
+            'ttl'      => isset($mon['block_ttl_hours']) ? intval($mon['block_ttl_hours']) : 24,
+        ];
+        // interface override
+        if ($if && isset($mon['interfaces'][$if])) {
+            $intf = $mon['interfaces'][$if];
+            if (array_key_exists('enable', $intf)) $res['enabled'] = !!$intf['enable'];
+            if (isset($intf['threshold']) && $intf['threshold'] !== '') $res['threshold'] = floatval($intf['threshold']);
+            if (isset($intf['ttl']) && $intf['ttl'] !== '') $res['ttl'] = intval($intf['ttl']);
+        }
+        // rule override (wins)
+        if ($rule && isset($mon['rules'][$rule])) {
+            $r = $mon['rules'][$rule];
+            if (array_key_exists('enable', $r)) $res['enabled'] = !!$r['enable'];
+            if (isset($r['threshold']) && $r['threshold'] !== '') $res['threshold'] = floatval($r['threshold']);
+            if (isset($r['ttl']) && $r['ttl'] !== '') $res['ttl'] = intval($r['ttl']);
+        }
+        return $res;
+    }
+
+    public static function policy_enabled($if = null, $rule = null) {
+        $p = self::get_ai_policy($if, $rule);
+        return !empty($p['enabled']);
+    }
 }
 
 class ProviderGemini extends AIProvider {
