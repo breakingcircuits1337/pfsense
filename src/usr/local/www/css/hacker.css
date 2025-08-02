@@ -1,0 +1,19 @@
+body {background:#0d0d0d; color:#00ff00;}
+.navbar, .panel-heading, .card-header {background:#111 !important; border-color:#00ff00 !important;}
+a, .btn-link {color:#00ff00;} a:hover{color:#66ff66;}
+.btn, .btn-primary {background:#003300; border-color:#00ff00; color:#00ff00;}
+.btn-primary:hover {background:#005500;}
+.table>thead>tr>th {color:#00ff00;}
+input, select, textarea {background:#111 !important; color:#00ff00 !important; border:1px solid #00ff00 !important;}
+.card, .panel, .modal-content, .well {background:#161616 !important; border-color:#00ff00 !important;}
+.panel-default > .panel-heading {background:#111 !important;}
+.form-control:focus {border-color:#66ff66; box-shadow:0 0 8px #00ff00;}
+::-webkit-input-placeholder {color:#00ff00;}
+::-moz-placeholder {color:#00ff00;}
+:-ms-input-placeholder {color:#00ff00;}
+::placeholder {color:#00ff00;}
+h1, h2, h3, h4, h5, h6 {color:#00ff00; text-shadow:0 0 8px #00ff00;}
+footer, .footer, .copyright {color:#00ff00;}
+.navbar-brand img {height:40px;}
+hr {border-color: #00ff00;}
+@media (max-width: 767px) {.navbar-brand {font-size:20px !important;}}

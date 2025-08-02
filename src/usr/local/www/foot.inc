@@ -28,14 +28,12 @@
 ?>
 	</div>
 	<footer class="footer">
-		<div class="container">
-			<p class="text-muted">
-				<a id="tpl" style="display: none;" href="#" title="<?=gettext('Top of page')?>"><i class="fa-regular fa-square-caret-up pull-left"></i></a>
-				<?=print_credit();?>
-				<a id="tpr" style="display: none;" href="#" title="<?=gettext('Top of page')?>"><i class="fa-regular fa-square-caret-up pull-right"></i></a>
-			</p>
-		</div>
-	</footer>
+    <div class="container">
+        <p class="text-muted text-center" style="color:#00ff00;">
+            &copy; 2024 <?= defined('BRAND_NAME') ? BRAND_NAME : "BC's PFnonsense" ?>.
+        </p>
+    </div>
+</footer>
 
 	<!-- This use of filemtime() is intended to fool the browser into reloading the file (not using the cached version) if the file is changed -->
 

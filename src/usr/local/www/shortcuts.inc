@@ -299,4 +299,24 @@ $shortcuts['aliases'] = array();
 $shortcuts['aliases']['main'] = "firewall_aliases.php";
 $shortcuts['aliases']['status'] = "diag_tables.php";
 
+// AI Assistant shortcut (Diagnostics)
+$shortcuts['aiassistant'] = array();
+$shortcuts['aiassistant']['main'] = "ai_assistant.php";
+
+// AI Threats shortcut (Diagnostics)
+$shortcuts['aithreats'] = array();
+$shortcuts['aithreats']['main'] = "diag_ai_threats.php";
+
+// AI Rule Changes shortcut (Diagnostics)
+$shortcuts['airulechanges'] = array();
+$shortcuts['airulechanges']['main'] = "diag_ai_rule_changes.php";
+
+// ATT&CK Console shortcut (Diagnostics)
+$shortcuts['attackconsole'] = array();
+$shortcuts['attackconsole']['main'] = "diag_ai_attack_console.php";
+
+// AI Policies shortcut (Firewall)
+$shortcuts['aipolicy'] = array();
+$shortcuts['aipolicy']['main'] = "firewall_ai_policy.php";
+
 ?>

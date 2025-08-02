@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# PROVIDE: ai_threat_monitor
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="ai_threat_monitor"
+rcvar="ai_threat_monitor_enable"
+command="/usr/local/bin/ai_threat_monitor.php"
+pidfile="/var/run/${name}.pid"
+
+load_rc_config $name
+run_rc_command "$1"
