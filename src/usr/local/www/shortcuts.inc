@@ -299,4 +299,8 @@ $shortcuts['aliases'] = array();
 $shortcuts['aliases']['main'] = "firewall_aliases.php";
 $shortcuts['aliases']['status'] = "diag_tables.php";
 
+// AI Assistant shortcut (Diagnostics)
+$shortcuts['aiassistant'] = array();
+$shortcuts['aiassistant']['main'] = "ai_assistant.php";
+
 ?>
