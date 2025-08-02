@@ -311,6 +311,10 @@ $shortcuts['aithreats']['main'] = "diag_ai_threats.php";
 $shortcuts['airulechanges'] = array();
 $shortcuts['airulechanges']['main'] = "diag_ai_rule_changes.php";
 
+// ATT&CK Console shortcut (Diagnostics)
+$shortcuts['attackconsole'] = array();
+$shortcuts['attackconsole']['main'] = "diag_ai_attack_console.php";
+
 // AI Policies shortcut (Firewall)
 $shortcuts['aipolicy'] = array();
 $shortcuts['aipolicy']['main'] = "firewall_ai_policy.php";

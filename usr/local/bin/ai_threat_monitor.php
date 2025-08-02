@@ -51,10 +51,18 @@ function pfctl_block($ip) {
 function pfctl_create() {
     mwexec('/sbin/pfctl -t ai_blocklist -T show 2>/dev/null || /sbin/pfctl -t ai_blocklist -T create');
 }
+require_once("/etc/inc/attack.inc");
 function blocklist_add($ip, $reason, $ttl_hours = 24) {
     $file = '/var/db/ai_blocklist.json';
     $expire_ts = time() + (int)($ttl_hours * 3600);
     $rec = [ 'ip' => $ip, 'reason' => $reason, 'ts' => date('c'), 'expire_ts' => $expire_ts ];
+    // MITRE ATT&CK mapping
+    $attack = attack_map($reason);
+    if ($attack) {
+        $rec['attack_id'] = $attack['id'];
+        $rec['attack_tactic'] = $attack['tactic'];
+        $rec['attack_technique'] = $attack['technique'];
+    }
     $rows = [];
     if (file_exists($file)) {
         $rows = json_decode(file_get_contents($file), true);
@@ -64,6 +72,21 @@ function blocklist_add($ip, $reason, $ttl_hours = 24) {
     $rows = array_filter($rows, fn($row) => $row['ip'] !== $ip);
     $rows[] = $rec;
     file_put_contents($file, json_encode(array_values($rows)));
+    // Log to ai_events.log
+    $event = [
+        'type' => 'block',
+        'ip' => $ip,
+        'reason' => $reason,
+        'ts' => $rec['ts']
+    ];
+    if ($attack) {
+        $event += [
+            'attack_id' => $attack['id'],
+            'attack_tactic' => $attack['tactic'],
+            'attack_technique' => $attack['technique']
+        ];
+    }
+    file_put_contents('/var/db/ai_events.log', json_encode($event) . "\n", FILE_APPEND);
 }
 
 function is_blocked($ip) {

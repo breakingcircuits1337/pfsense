@@ -14,7 +14,8 @@
     },
     "files": [
       "src/etc/inc/ai.inc",
-      "src/etc/inc/ids.inc"
+      "src/etc/inc/ids.inc",
+      "src/etc/inc/attack.inc"
     ]
   },
     "config": {
