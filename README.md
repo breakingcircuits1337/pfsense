@@ -1,16 +1,65 @@
-# pfSense
+# BC's PFnonSense
 
-## Overview
+## # BC’s PFnonsense
+_The hacker-themed, AI-augmented firewall & routing distro (forked from pfSense)_
 
-The pfSense project is a free network firewall distribution, based on the FreeBSD operating system with a custom kernel and including third party free software packages for additional functionality. pfSense software, with the help of the package system, is able to provide the same functionality or more of common commercial firewalls, without any of the artificial limitations. It has successfully replaced every big name commercial firewall you can imagine in numerous installations around the world, including Check Point, Cisco PIX, Cisco ASA, Juniper, Sonicwall, Netgear, Watchguard, Astaro, and more.
+![logo](src/usr/local/www/img/bc_logo.svg)
 
-pfSense software includes a web interface for the configuration of all included components. There is no need for any UNIX knowledge, no need to use the command line for anything, and no need to ever manually edit any rule sets. Users familiar with commercial firewalls catch on to the web interface quickly, though there can be a learning curve for users not familiar with commercial-grade firewalls.
+---
 
-pfSense started in 2004 as a fork of the [m0n0wall](http://m0n0.ch/wall/index.php "m0n0wall project homepage") Project (which ended 2015/02/15), though has diverged significantly since.
+## ✨ What makes it different?
 
-pfSense is Copyright 2004-2025 [Rubicon Communications, LLC (Netgate)](https://pfsense.org/license "License Information") and published under an open source license.
-Read more at [https://pfsense.org/](https://pfsense.org/ "The pfSense homepage") and support the team by buying bundled hardware appliances or commercial support.
+| Capability | Description |
+|------------|-------------|
+| **AI Assistant** | Chat, voice or speech-to-text; answers config questions, explains rules, executes changes. |
+| **LLM Provider Plug-ins** | Gemini, Mistral, Groq – selectable per user. |
+| **AI Threat-Monitor** | Analyses pf / Snort / Suricata logs, auto-blocks attackers with confidence threshold & TTL. |
+| **MITRE ATT&CK Console** | Every alert auto-mapped to tactic/technique; kill-chain visual and playbook links. |
+| **Dynamic Deception / Honeypot** | Low-interaction listener with AI-generated banners; scans diverted transparently; hits feed AI confidence. |
+| **IDS/IPS Rule Control** | Enable/disable/add rules via chat or one-click in suggestion modal; Emerging-Threats index search. |
+| **Per-Interface & Per-Rule Policies** | Fine-grained enable/disable, custom thresholds & TTL. |
+| **Dark “Hacker” UI Theme** | Neon-green, mono-font styling plus custom branding. |
 
-## Contribute
+---
 
-For information on how to contribute to the pfSense project, see [CONTRIBUTING](.github/CONTRIBUTING.md).
+## Directory quick-tour
+
+---
+
+## Building an image
+
+```sh
+# 1. Install FreeBSD 14 build deps (on the host or a bhyve/VM)
+pkg install git gmake php81 php81-curl curl bash
+
+# 2. Clone & configure
+git clone https://github.com/your-org/PFnonsense.git
+cd PFnonsense
+cp build.conf.sample build.conf   # tweak as needed
+
+# 3. Build appliance ISO / memstick
+./build.sh
+
+The resulting artefacts land in build/output/
+Flash to USB or boot in your favourite hypervisor.
+First-boot quick-start
+
+    Browse to https://192.168.1.1 → login admin / pfnonsense.
+    Navigate: Services → AI Assistant Settings
+        Paste API keys for Gemini/Mistral/Groq.
+        Tick Enable Threat Monitor and Enable Honeypot.
+    Visit Diagnostics → AI Assistant and say “help me secure my WAN”.
+
+
+/etc/periodic/daily/
+ ├─ et_index      – refresh Emerging-Threats index
+ └─ honeypot_seed – feed scanners into pf honeypot table
+
+Disable by removing the symlinks if not required.
+Contributing
+
+    PRs welcome – follow PSR-2 coding style (see .editorconfig).
+    New ATT&CK mappings: edit attack.inc.
+    Custom UI widgets: place PHP under src/usr/local/www/widgets/.
+
+Star ⭐ the repo and spread the (non)sense!
