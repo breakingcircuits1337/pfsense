@@ -27,6 +27,7 @@ if (!is_numeric($sid) || $sid <= 0 || $sid >= 1000000000) {
 try {
 	if ($action === 'enable') {
 		ids_enable_sid($type, $sid);
+		ids_log_change($type, "enable", $sid, "Enabled via UI/API");
 		echo json_encode(['success'=>true,'message'=>"Enabled SID $sid on $type."]);
 		exit;
 	} elseif ($action === 'add' && $rule) {
@@ -34,6 +35,7 @@ try {
 		if (!preg_match('/sid\s*:\s*'.$sid.'/', $rule)) throw new Exception("SID missing from rule text");
 		$ok = ids_add_rule($type, $sid, $rule);
 		if ($ok) {
+			ids_log_change($type, "add", $sid, "Added via UI/API");
 			echo json_encode(['success'=>true,'message'=>"Added rule SID $sid to $type."]);
 		} else {
 			echo json_encode(['success'=>false,'message'=>"SID $sid already exists in $type custom rules."]);

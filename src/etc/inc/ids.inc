@@ -88,3 +88,22 @@ function et_search_keywords($kw, $limit = 5) {
 	}
 	return $results;
 }
+
+// Log AI-driven IDS rule changes
+function ids_log_change($type, $action, $sid, $details = '') {
+	$logfile = '/var/db/ai_rule_changes.log';
+	$rec = [
+		'ts' => date('c'),
+		'engine' => $type,
+		'action' => $action,
+		'sid' => $sid,
+		'info' => $details,
+	];
+	file_put_contents($logfile, json_encode($rec) . "\n", FILE_APPEND);
+	// Truncate if >1MB, keep last 500 lines
+	if (file_exists($logfile) && filesize($logfile) > 1024*1024) {
+		$lines = file($logfile);
+		$lines = array_slice($lines, -500);
+		file_put_contents($logfile, implode("", $lines));
+	}
+}

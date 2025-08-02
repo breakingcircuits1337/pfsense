@@ -307,6 +307,10 @@ $shortcuts['aiassistant']['main'] = "ai_assistant.php";
 $shortcuts['aithreats'] = array();
 $shortcuts['aithreats']['main'] = "diag_ai_threats.php";
 
+// AI Rule Changes shortcut (Diagnostics)
+$shortcuts['airulechanges'] = array();
+$shortcuts['airulechanges']['main'] = "diag_ai_rule_changes.php";
+
 // AI Policies shortcut (Firewall)
 $shortcuts['aipolicy'] = array();
 $shortcuts['aipolicy']['main'] = "firewall_ai_policy.php";
