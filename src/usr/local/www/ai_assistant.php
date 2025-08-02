@@ -109,11 +109,18 @@ function sendMessage() {
       }
     }
     if (data.action === 'suggest' && Array.isArray(data.suggestions)) {
-      let msg = "Emerging Threats suggestions:\n";
+      // Build Bootstrap modal
+      let modal = $('#suggestModal');
+      let tbody = modal.find('tbody');
+      tbody.empty();
       data.suggestions.forEach(function(s) {
-        msg += "SID " + s.sid + ": " + s.msg + "\n";
+        let tr = $('<tr>');
+        tr.append('<td>' + s.sid + '</td>');
+        tr.append('<td>' + s.msg + '</td>');
+        tr.append('<td><button class="btn btn-xs btn-primary" onclick="addRule(\''+data.target+'\', '+s.sid+')">Enable</button></td>');
+        tbody.append(tr);
       });
-      alert(msg);
+      modal.modal('show');
     }
   })
   .catch(() => {
@@ -135,16 +142,36 @@ if (!!window.EventSource) {
 }
 </script>
 
-<?php
-/*
- * ai_assistant.php
- * pfSense AI Assistant - Chat-style interface
- */
-require_once("guiconfig.inc");
-require_once("/etc/inc/ai.inc");
+<!-- Suggest Modal -->
+<div id="suggestModal" class="modal fade" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document" style="width:600px">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title">Emerging Threats Rule Suggestions</h4>
+      </div>
+      <div class="modal-body">
+        <table class="table table-striped">
+          <thead><tr><th>SID</th><th>Description</th><th>Action</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function addRule(target, sid) {
+  fetch('/api/ids_manage.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target: target, action: 'enable', sid: sid})
+  })
+  .then(r => r.json())
+  .then(data => {
+    alert(data.message);
+  })
+  .catch(() => alert("Network error"));
+}
+</script>
 
-$voice_enabled = $config['system']['ai']['voice_enable'] ?? false;
-$system_prompt = 'If you wish to enable/disable/add IDS/IPS rules, reply only with a valid JSON object: {"target":"snort|suricata","action":"enable|disable|add","sid":SID,"rule":"<text>","message":"..."}; or if you want rule suggestions, respond with {"target":"suricata|snort","action":"suggest","keyword":"<search words>"}';
-
-include("head.inc");
-?> include("foot.inc"); ?>
+<?php include("foot.inc"); ?>
