@@ -1,8 +1,8 @@
-# BC's PFnonSense
+# H6thSense
 
 _The hacker-themed, AI-augmented firewall & routing distro (forked from pfSense)_
 
-![logo](src/usr/local/www/img/bc_logo.svg)
+![logo](src/usr/local/www/img/h6thsense_logo.svg)
 
 ---
 

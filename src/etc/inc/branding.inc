@@ -1,3 +1,3 @@
 <?php
-define('BRAND_NAME', "BC's PFnonsense");
-define('BRAND_LOGO_PATH', '/img/bc_logo.svg');
+define('BRAND_NAME', "H6thSense");
+define('BRAND_LOGO_PATH', '/img/h6thsense_logo.svg');

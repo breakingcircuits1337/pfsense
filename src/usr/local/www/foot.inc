@@ -30,7 +30,7 @@
 	<footer class="footer">
     <div class="container">
         <p class="text-muted text-center" style="color:#00ff00;">
-            &copy; 2024 <?= defined('BRAND_NAME') ? BRAND_NAME : "BC's PFnonsense" ?>.
+            &copy; 2024 <?= defined('BRAND_NAME') ? BRAND_NAME : "H6thSense" ?>.
         </p>
     </div>
 </footer>
