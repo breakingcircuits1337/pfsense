@@ -24,6 +24,25 @@ $tab = $_GET['tab'] ?? 'assistant';
 function active_tab($name, $tab) { return $name === $tab ? 'style="font-weight:bold;text-decoration:underline;"' : ''; }
 function esc($s) { return htmlspecialchars($s, ENT_QUOTES); }
 function render_list($arr) { if (!$arr) return ''; $out = "<ul>"; foreach ($arr as $a) $out .= "<li>" . esc($a) . "</li>"; return $out . "</ul>"; }
+// Log recent AI Assistant events for dashboard widget
+function ai_log_recent($type, $summary, $tab) {
+    $file = "/tmp/ai_assistant_recent.jsonl";
+    $row = [
+        'ts' => date('c'),
+        'type' => $type,
+        'summary' => mb_substr((string)$summary, 0, 200),
+        'tab' => $tab
+    ];
+    $line = json_encode($row, JSON_UNESCAPED_SLASHES) . "\n";
+    $ok = @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+    if ($ok === false) return; // silent fail if not writable
+    // Trim if exceeds 200 lines
+    $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines && count($lines) > 200) {
+        $lines = array_slice($lines, -200);
+        @file_put_contents($file, implode("\n", $lines) . "\n");
+    }
+}
 
 // CSRF enforcement
 function check_csrf() {
@@ -40,20 +59,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   check_csrf();
   // ASSISTANT tab
   if ($_POST['action'] === 'preview_nl') {
-    $tab = 'assistant';
-    $provider_name = $_POST['provider'] ?? '';
-    $nl_input = trim($_POST['nl_input'] ?? '');
-    try {
-      if (!$nl_input) throw new Exception("Please enter a request.");
-      $provider = $provider_name ? AIProviderFactory::make($provider_name) : AIProviderFactory::from_config();
-      $assistant = new AIAssistant($provider);
-      $result = $assistant->handle_request($nl_input);
-      $proposal = $result['proposal'] ?? null;
-      if (!$proposal) throw new Exception("No proposal generated.");
-    } catch (Exception $e) {
-      $error = "Preview failed: " . $e->getMessage();
-    }
-  } elseif ($_POST['action'] === 'apply_nl') {
+        $tab = 'assistant';
+        $provider_name = $_POST['provider'] ?? '';
+        $nl_input = trim($_POST['nl_input'] ?? '');
+        try {
+          if (!$nl_input) throw new Exception("Please enter a request.");
+          $provider = $provider_name ? AIProviderFactory::make($provider_name) : AIProviderFactory::from_config();
+          $assistant = new AIAssistant($provider);
+          $result = $assistant->handle_request($nl_input);
+          $proposal = $result['proposal'] ?? null;
+          if (!$proposal) throw new Exception("No proposal generated.");
+          ai_log_recent('assistant', $result['proposal']['explanation'] ?? 'Assistant preview', 'assistant');
+        } catch (Exception $e) {
+          $error = "Preview failed: " . $e->getMessage();
+        }
+      } elseif ($_POST['action'] === 'apply_nl') {
     $tab = 'assistant';
     try {
       $proposal = json_decode($_POST['proposal_json'] ?? '', true);
@@ -73,15 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   // ANALYZE RULES tab
   elseif ($_POST['action'] === 'analyze_rules') {
-    $tab = 'analyze';
-    try {
-      $analysis = AIRuleAnalyzer::analyze();
-      $report = AIRuleAnalyzer::renderReport($analysis);
-      $proposal = $report['proposal'] ?? null;
-    } catch (Exception $e) {
-      $error = "Analyze failed: " . $e->getMessage();
-    }
-  } elseif ($_POST['action'] === 'apply_analysis') {
+        $tab = 'analyze';
+        try {
+          $analysis = AIRuleAnalyzer::analyze();
+          $report = AIRuleAnalyzer::renderReport($analysis);
+          $proposal = $report['proposal'] ?? null;
+          ai_log_recent('analyze', $analysis['summary'] ?? (explode("\n", $report['text'])[0] ?? 'Analysis'), 'analyze');
+        } catch (Exception $e) {
+          $error = "Analyze failed: " . $e->getMessage();
+        }
+      } elseif ($_POST['action'] === 'apply_analysis') {
     $tab = 'analyze';
     try {
       $proposal = json_decode($_POST['proposal_json'] ?? '', true);
@@ -113,21 +134,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   }
   elseif ($_POST['action'] === 'wizard_next') {
-    $tab = 'wizards';
-    $wiz_type = $_SESSION['ai_wizard_type'] ?? '';
-    $state = $_SESSION['ai_wizard_state'] ?? [];
-    $answers = [];
-    foreach ($_POST as $k => $v) {
-      if (strpos($k, 'answer_') === 0) $answers[substr($k,7)] = $v;
-    }
-    $res = AIWizards::next($wiz_type, $state, $answers);
-    $_SESSION['ai_wizard_state'] = $res['state'];
-    $_SESSION['ai_wizard_questions'] = $res['questions'] ?? [];
-    if (!empty($res['complete'])) {
-      $proposal = AIWizards::buildProposal($wiz_type, $res['state']);
-      $_SESSION['ai_wizard_proposal_json'] = json_encode($proposal);
-    }
-  }
+        $tab = 'wizards';
+        $wiz_type = $_SESSION['ai_wizard_type'] ?? '';
+        $state = $_SESSION['ai_wizard_state'] ?? [];
+        $answers = [];
+        foreach ($_POST as $k => $v) {
+          if (strpos($k, 'answer_') === 0) $answers[substr($k,7)] = $v;
+        }
+        $res = AIWizards::next($wiz_type, $state, $answers);
+        $_SESSION['ai_wizard_state'] = $res['state'];
+        $_SESSION['ai_wizard_questions'] = $res['questions'] ?? [];
+        if (!empty($res['complete'])) {
+          $proposal = AIWizards::buildProposal($wiz_type, $res['state']);
+          $_SESSION['ai_wizard_proposal_json'] = json_encode($proposal);
+          ai_log_recent('wizard', $proposal['explanation'] ?? 'Wizard proposal', 'wizards');
+        }
+      }
   elseif ($_POST['action'] === 'wizard_apply') {
     $tab = 'wizards';
     try {
