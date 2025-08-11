@@ -7,6 +7,8 @@
  */
 require_once __DIR__ . '/../src/usr/local/pfSense/include/vendor/autoload.php';
 require_once dirname(__DIR__) . '/src/etc/inc/ai_assistant.inc';
+require_once dirname(__DIR__) . '/src/etc/inc/ai_rules.inc';
+require_once dirname(__DIR__) . '/src/etc/inc/ai_wizards.inc';
 
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -81,4 +83,138 @@ if ($model) {
 
 $application = new Application();
 $application->add(new AiChatCommand());
+$application->add(new AiAnalyzeRulesCommand());
+$application->add(new AiWizardCommand());
 $application->run();
+
+/**
+ * Command: ai:analyze-rules
+ */
+class AiAnalyzeRulesCommand extends Command
+{
+    protected static $defaultName = 'ai:analyze-rules';
+    protected static $defaultDescription = 'Analyze firewall rules and preview AI-suggested improvements.';
+
+    protected function configure()
+    {
+        $this
+            ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $json = $input->getOption('json');
+        $analyzer = new AIRuleAnalyzer();
+        $analysis = $analyzer->analyze();
+        $report = $analyzer->renderReport($analysis);
+
+        if ($json) {
+            $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            $output->writeln("<info>Rule Analysis Summary:</info>");
+            $output->writeln("  Rules analyzed: " . ($report['counts']['analyzed'] ?? 0));
+            $output->writeln("  Issues found: " . ($report['counts']['issues'] ?? 0));
+            $output->writeln("\n<info>Findings:</info>");
+            foreach (($report['findings'] ?? []) as $f) {
+                $output->writeln("  - {$f}");
+            }
+            if (!empty($report['suggested_operations'])) {
+                $output->writeln("\n<info>Suggested Operations (preview):</info>");
+                // Map suggested ops to pseudo-proposal
+                $proposalOps = [];
+                foreach ($report['suggested_operations'] as $op) {
+                    if (isset($op['op'])) {
+                        $proposalOps[] = [
+                            'op' => 'rule_anchor_note',
+                            'note' => '[AI Suggestion] ' . ($op['desc'] ?? json_encode($op))
+                        ];
+                    }
+                }
+                $plan = [
+                    'operations' => $proposalOps,
+                    'impacts' => [],
+                    'risk_warnings' => [],
+                    'explanation' => 'AI preview of rule operations.'
+                ];
+                $preview = AIPlanRenderer::render_preview($plan);
+                if (isset($preview['text'])) {
+                    $output->writeln($preview['text']);
+                }
+                if (isset($preview['diff'])) {
+                    $output->writeln($preview['diff']);
+                }
+            }
+            $output->writeln("\n<comment>No changes have been applied.</comment>");
+        }
+        return Command::SUCCESS;
+    }
+}
+
+/**
+ * Command: ai:wizard
+ */
+class AiWizardCommand extends Command
+{
+    protected static $defaultName = 'ai:wizard';
+    protected static $defaultDescription = 'Guided AI wizard for HA, Multi-WAN, or VPN configuration (preview only)';
+
+    protected function configure()
+    {
+        $this
+            ->addArgument('type', InputArgument::REQUIRED, 'Wizard type: ha|multiwan|vpn');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $type = strtolower($input->getArgument('type'));
+        $valid = ['ha', 'multiwan', 'vpn'];
+        if (!in_array($type, $valid)) {
+            $output->writeln("<error>Invalid wizard type. Use one of: ha, multiwan, vpn.</error>");
+            return Command::FAILURE;
+        }
+
+        $helper = $this->getHelper('question');
+        $state = [];
+        $result = AIWizards::start($type);
+        $state = $result['state'];
+        $questions = $result['questions'];
+
+        while (true) {
+            $answers = [];
+            foreach ($questions as $key => $questionText) {
+                $q = new \Symfony\Component\Console\Question\Question($questionText . ' ');
+                $answers[$key] = $helper->ask($input, $output, $q);
+            }
+            $result = AIWizards::next($type, $state, $answers);
+            $state = $result['state'];
+            if (!empty($result['complete'])) {
+                break;
+            }
+            $questions = $result['questions'];
+        }
+
+        $proposal = AIWizards::buildProposal($type, $state);
+        $output->writeln("\n<info>Proposal Preview:</info>");
+        $preview = AIPlanRenderer::render_preview($proposal);
+        if (!empty($preview['text'])) {
+            $output->writeln($preview['text']);
+        }
+        if (!empty($preview['diff'])) {
+            $output->writeln($preview['diff']);
+        }
+        if (!empty($proposal['impacts'])) {
+            $output->writeln("<info>Impacts:</info>");
+            foreach ($proposal['impacts'] as $impact) {
+                $output->writeln("  - $impact");
+            }
+        }
+        if (!empty($proposal['risk_warnings'])) {
+            $output->writeln("<comment>Risk Warnings:</comment>");
+            foreach ($proposal['risk_warnings'] as $warn) {
+                $output->writeln("  - $warn");
+            }
+        }
+        $output->writeln("\n<comment>This is a preview only. No changes have been applied.</comment>");
+        return Command::SUCCESS;
+    }
+}
