@@ -5,7 +5,7 @@
  * Usage: ai:chat [--provider=] [--model=] [--json] "<input>"
  * Prints preview and summary. No changes are applied.
  */
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../src/usr/local/pfSense/include/vendor/autoload.php';
 require_once dirname(__DIR__) . '/src/etc/inc/ai_assistant.inc';
 
 use Symfony\Component\Console\Application;
@@ -38,8 +38,12 @@ class AiChatCommand extends Command
         // Instantiate provider if specified (else null)
         $provider = null;
         if ($providerName) {
-            $provider = AIProviderFactory::from_name($providerName, $model);
-        }
+    $provider = AIProviderFactory::make($providerName);
+}
+if ($model) {
+    // Model override not yet supported in CLI
+    fwrite(STDERR, "[warning] --model override is not yet supported in CLI mode.\n");
+}
 
         $assistant = new AIAssistant($provider);
         $result = $assistant->handle_request($userInput);

@@ -8,15 +8,18 @@
         "symfony/console": "^7.2"
     },
     "autoload": {
-        "files": [
-            "src/etc/inc/util.inc",
-            "src/etc/inc/legacy.inc",
-            "src/etc/inc/ai_provider_factory.inc",
-            "src/etc/inc/ai_provider.inc",
-            "src/etc/inc/ai_plan_renderer.inc",
-            "src/etc/inc/ai_assistant.inc"
-        ]
+    "psr-4": {
+      "pfSense\\": "src/",
+      "AI\\": "src/etc/inc/"
     },
+    "files": [
+      "src/etc/inc/ai.inc",
+      "src/etc/inc/ids.inc",
+      "src/etc/inc/attack.inc",
+      "src/etc/inc/ai_plan_renderer.inc",
+      "src/etc/inc/ai_assistant.inc"
+    ]
+  },
     "config": {
         "vendor-dir": "src/usr/local/pfSense/include/vendor",
         "optimize-autoloader": true

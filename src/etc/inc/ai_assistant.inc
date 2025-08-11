@@ -7,8 +7,7 @@
  */
 
 require_once __DIR__ . '/ai_plan_renderer.inc';
-require_once __DIR__ . '/ai_provider_factory.inc'; // assumed to exist
-require_once __DIR__ . '/ai_provider.inc'; // assumed to exist
+require_once __DIR__ . '/ai.inc'; // assumed to exist
 
 class AIAssistant
 {
@@ -244,20 +243,14 @@ class AIAssistant
             $clarifications[] = "For remote access or site-to-site? Any specific networks, authentication, or ports?";
             $proposal['explanation'] = "Request not specific enough for a safe configuration. Please clarify the VPN type, purpose, and key parameters.";
         }
-        // Catch-all: fallback to provider for classification and preview only.
+        // Catch-all: fallback to safe clarifying message.
         else {
-            $intent = $this->provider ? $this->provider->classify_intent($input) : null;
-            $proposal['explanation'] = "Could not deterministically recognize the request. ";
-            if ($intent) {
-                $proposal['explanation'] .= "Detected intent: {$intent['name']} – {$intent['description']}.";
-                if (!empty($intent['clarifications'])) {
-                    $clarifications = array_merge($clarifications, $intent['clarifications']);
-                    $requires_confirmation = false;
-                }
-            } else {
-                $proposal['explanation'] .= "Please provide more details or rephrase your request.";
-                $requires_confirmation = false;
-            }
+            $requires_confirmation = false;
+            $proposal['explanation'] = "Sorry, I couldn't confidently understand your request. Please clarify your intent. For example:\n"
+                . "- What service or feature would you like to configure?\n"
+                . "- Which network(s) or interface(s) should be affected?\n"
+                . "- Are there specific ports, IP addresses, or ranges involved?\n"
+                . "- Should this apply to inbound, outbound, or both directions?\n";
         }
 
         // Preview rendering
