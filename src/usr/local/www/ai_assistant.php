@@ -6,6 +6,8 @@
  * - Wizards (guided config)
  * Always preview-only by default; guarded apply with explicit confirmation.
  */
+require_once('guiconfig.inc');
+if (!isAllowedPage(basename(__FILE__))) { header('HTTP/1.1 403 Forbidden'); echo gettext('Access denied.'); exit; }
 require_once __DIR__ . '/../pfSense/include/vendor/autoload.php';
 session_start();
 if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(16)); }
@@ -183,12 +185,11 @@ function render_apply_modal($proposal, $validate, $csrf, $action, $extra_fields 
 HTML;
 }
 
-?><!DOCTYPE html>
-<html>
-<head>
-  <title>AI Assistant</title>
+<?php
+// everything else remains inside <section class="page-content-main"> and will be wrapped by head.inc/footer.inc
+?>
+<section class="page-content-main">
   <style>
-    body { font-family: sans-serif; margin: 0; background: #f7f7f7; }
     .tabs { margin: 0 0 1em 0; padding: 0; background: #eef; }
     .tabs a { padding: 0.8em 1.5em; display: inline-block; color: #333; text-decoration: none; }
     .tabs a.active { background: #fff; border-bottom: 3px solid #3984e4; font-weight: bold; }
@@ -206,13 +207,34 @@ HTML;
     button[disabled] { background:#bbb; }
     .tabcontent { display:none; }
     .tabcontent.active { display:block; }
+    .about-panel { background: #eef; border-radius: 5px; margin-bottom: 1.5em; padding: 1.2em; }
+    .about-toggle { float:right; font-size:.95em; cursor:pointer; color:#397; }
+    .settings-link { float:right; font-size:.95em; margin-left:1.2em; }
   </style>
-</head>
-<body>
   <div class="tabs">
     <a href="?tab=assistant" <?=active_tab('assistant',$tab)?>>Assistant</a>
     <a href="?tab=analyze" <?=active_tab('analyze',$tab)?>>Analyze Rules</a>
     <a href="?tab=wizards" <?=active_tab('wizards',$tab)?>>Wizards</a>
+  </div>
+  <div class="about-panel">
+    <span class="settings-link"><a href="/services_ai_settings.php" class="btn btn-xs btn-info">AI Settings</a></span>
+    <span class="about-toggle" onclick="var x=document.getElementById('about-details');x.style.display=x.style.display==='none'?'block':'none';this.innerText=x.style.display==='none'?'[show more]':'[hide]';">[show more]</span>
+    <b>About the AI Assistant:</b>
+    <div id="about-details" style="display:none;">
+      <ul>
+        <li><b>Providers supported:</b> Ollama (local), Gemini, Mistral, Groq</li>
+        <li><b>Keys and models:</b> Read from system/ai/* in config or environment variables. See <a href="/services_ai_settings.php">AI Settings</a> to configure.</li>
+        <li><b>Safety protocol:</b>
+          <ul>
+            <li>Clarifies your intent and asks questions if ambiguous</li>
+            <li>Explains and previews all proposed changes</li>
+            <li>NEVER applies changes without explicit second confirmation</li>
+            <li>Shows security warnings for risky operations (e.g., opening WAN, exposing admin ports)</li>
+            <li>All changes are dry-run/preview by default; nothing is written until you confirm</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
   </div>
   <div class="banner">
     <b>Security-first:</b> All changes are preview-only by default. <b>Second confirmation required to apply.</b> No changes are made until you explicitly confirm and apply.
@@ -356,5 +378,5 @@ HTML;
       }
     }
   ?>
-</body>
-</html>
+</section>
+<?php include("foot.inc"); ?>
