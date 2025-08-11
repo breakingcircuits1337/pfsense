@@ -1,0 +1,80 @@
+#!/usr/bin/env php
+<?php
+/**
+ * tools/ai — CLI entry for AI Assistant preview and intent handling.
+ * Usage: ai:chat [--provider=] [--model=] [--json] "<input>"
+ * Prints preview and summary. No changes are applied.
+ */
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once dirname(__DIR__) . '/src/etc/inc/ai_assistant.inc';
+
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+class AiChatCommand extends Command
+{
+    protected static $defaultName = 'ai:chat';
+    protected static $defaultDescription = 'Preview AI Assistant config plan (no changes applied)';
+
+    protected function configure()
+    {
+        $this
+            ->addArgument('input', InputArgument::REQUIRED, 'Natural language request')
+            ->addOption('provider', null, InputOption::VALUE_OPTIONAL, 'AI provider')
+            ->addOption('model', null, InputOption::VALUE_OPTIONAL, 'AI model')
+            ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $userInput = $input->getArgument('input');
+        $providerName = $input->getOption('provider');
+        $model = $input->getOption('model');
+
+        // Instantiate provider if specified (else null)
+        $provider = null;
+        if ($providerName) {
+            $provider = AIProviderFactory::from_name($providerName, $model);
+        }
+
+        $assistant = new AIAssistant($provider);
+        $result = $assistant->handle_request($userInput);
+
+        if ($input->getOption('json')) {
+            $output->writeln(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            $output->writeln("<info>Explanation:</info>\n" . ($result['proposal']['explanation'] ?? ''));
+            $output->writeln("<info>Preview:</info>\n" . ($result['preview']['text'] ?? ''));
+            $output->writeln("<info>Diff:</info>\n" . ($result['preview']['diff'] ?? ''));
+            if (!empty($result['preview']['impacts'])) {
+                $output->writeln("<info>Impacts:</info>");
+                foreach ($result['preview']['impacts'] as $impact) {
+                    $output->writeln("  - $impact");
+                }
+            }
+            if (!empty($result['preview']['risk_warnings'])) {
+                $output->writeln("<comment>Risk Warnings:</comment>");
+                foreach ($result['preview']['risk_warnings'] as $warn) {
+                    $output->writeln("  - $warn");
+                }
+            }
+            if (!empty($result['clarifying_questions'])) {
+                $output->writeln("<question>Clarifying Questions:</question>");
+                foreach ($result['clarifying_questions'] as $q) {
+                    $output->writeln("  - $q");
+                }
+            }
+            $output->writeln("\n<comment>No changes have been applied. Use an explicit Apply workflow to commit changes.</comment>");
+        }
+        // Always exit 0 since this is non-destructive
+        return Command::SUCCESS;
+    }
+}
+
+$application = new Application();
+$application->add(new AiChatCommand());
+$application->run();
