@@ -1,7 +1,11 @@
 <?php
 /**
  * AIWizards — Conversational guided wizards for pfSense AI Assistant.
- * Builds preview-only proposals for HA, Multi-WAN, and VPN setup.
+ * 
+ * PREVIEW-ONLY: Generates proposals for HA, Multi-WAN, and VPN setup.
+ * NEVER writes or applies changes to system config — all output is a preview.
+ * All operation items conform to the schema:
+ *   [ 'type' => string, 'path' => string, 'value' => array, 'note' => string? ]
  */
 
 class AIWizards
@@ -99,12 +103,74 @@ class AIWizards
 
     public static function buildProposal(string $type, array $state): array
     {
+        // All proposals are strictly preview-only, non-destructive.
         $a = $state['__answers'] ?? [];
+        $ops = [];
+        $impacts = [];
+        $risks = [];
+        $explanation = '';
+
         switch ($type) {
             case 'ha':
-                // Basic validation
                 $vhids = array_map('trim', explode(',', $a['vhids'] ?? '1'));
-                $ops = [];
+
+                $ops[] = [
+                    'type' => 'carp_vip_add',
+                    'path' => 'interfaces/vips[+]',
+                    'value' => [
+                        'interface' => $a['wan_iface'] ?? '',
+                        'subnet' => $a['vip_wan'] ?? '',
+                        'vhid' => (int)($vhids[0] ?? 1),
+                        'password' => '(provided)'
+                    ],
+                    'note' => 'Add CARP VIP on WAN'
+                ];
+                $ops[] = [
+                    'type' => 'carp_vip_add',
+                    'path' => 'interfaces/vips[+]',
+                    'value' => [
+                        'interface' => $a['lan_iface'] ?? '',
+                        'subnet' => $a['vip_lan'] ?? '',
+                        'vhid' => (int)($vhids[1] ?? 2),
+                        'password' => '(provided)'
+                    ],
+                    'note' => 'Add CARP VIP on LAN'
+                ];
+                $ops[] = [
+                    'type' => 'pfsync_enable',
+                    'path' => 'system/pfsync',
+                    'value' => [
+                        'enable' => true,
+                        'interface' => $a['pfsync_iface'] ?? ''
+                    ],
+                    'note' => 'Enable pfsync'
+                ];
+                $ops[] = [
+                    'type' => 'xmlrpc_sync_set',
+                    'path' => 'system/advanced/remote',
+                    'value' => [
+                        'peer_ip' => $a['xmlrpc_peer_ip'] ?? '',
+                        'password' => '(provided)'
+                    ],
+                    'note' => 'Set XMLRPC sync peer'
+                ];
+                $ops[] = [
+                    'type' => 'firewall_rule_add',
+                    'path' => 'filter/rule[+]',
+                    'value' => [
+                        'interface' => $a['pfsync_iface'] ?? '',
+                        'proto' => 'pfsync',
+                        'action' => 'pass',
+                        'description' => 'Allow pfsync for HA'
+                    ],
+                    'note' => 'Allow pfsync protocol on sync interface'
+                ];
+                $ops[] = [
+                    'type' => 'rule_anchor_note',
+                    'path' => '',
+                    'value' => [],
+                    'note' => 'HA: CARP, pfsync, and XMLRPC sync configured.'
+                ];
                 $impacts = [
                     'Enabling CARP may briefly interrupt traffic upon apply.',
                     'State sync and config sync settings will be changed.'
@@ -113,51 +179,44 @@ class AIWizards
                     'Ensure unique VHIDs and matching CARP passwords.',
                     'Ensure pfsync network is isolated.'
                 ];
-                // Add carp VIPs
-                $ops[] = [
-                    'op' => 'carp_vip_add',
-                    'iface' => $a['wan_iface'],
-                    'vip' => $a['vip_wan'],
-                    'vhid' => $vhids[0] ?? 1,
-                    'password' => '(provided)'
-                ];
-                $ops[] = [
-                    'op' => 'carp_vip_add',
-                    'iface' => $a['lan_iface'],
-                    'vip' => $a['vip_lan'],
-                    'vhid' => $vhids[1] ?? 2,
-                    'password' => '(provided)'
-                ];
-                $ops[] = [
-                    'op' => 'pfsync_enable',
-                    'iface' => $a['pfsync_iface']
-                ];
-                $ops[] = [
-                    'op' => 'xmlrpc_sync_set',
-                    'peer_ip' => $a['xmlrpc_peer_ip'],
-                    'password' => '(provided)'
-                ];
-                $ops[] = [
-                    'op' => 'firewall_rule_add',
-                    'anchor' => 'pfsync',
-                    'iface' => $a['pfsync_iface'],
-                    'proto' => 'pfsync',
-                    'desc' => 'Allow pfsync for HA'
-                ];
-                $ops[] = [
-                    'op' => 'rule_anchor_note',
-                    'note' => 'HA: CARP, pfsync, and XMLRPC sync configured.'
-                ];
-                return [
-                    'operations' => $ops,
-                    'impacts' => $impacts,
-                    'risk_warnings' => $risks,
-                    'explanation' => 'Configures High Availability (CARP, pfsync, XMLRPC sync) for two-node cluster.'
-                ];
+                $explanation = 'Configures High Availability (CARP, pfsync, XMLRPC sync) for two-node cluster.';
+                break;
             case 'multiwan':
                 $wan_ifaces = array_map('trim', explode(',', $a['wan_ifaces'] ?? 'wan,wan2'));
                 $mode = strtolower(trim($a['mode'] ?? 'failover'));
-                $ops = [];
+                $weights = (!empty($a['weights'])) ? array_map('trim', explode(',', $a['weights'])) : [];
+                $monitor_ips = (!empty($a['monitor_ips'])) ? array_map('trim', explode(',', $a['monitor_ips'])) : [];
+                $trigger_level = $a['trigger_level'] ?? 'packet-loss';
+
+                $ops[] = [
+                    'type' => 'gateway_group_add',
+                    'path' => 'gateways/gateway_group[+]',
+                    'value' => [
+                        'interfaces' => $wan_ifaces,
+                        'mode' => $mode,
+                        'weights' => $weights,
+                        'monitor_ips' => $monitor_ips,
+                        'trigger_level' => $trigger_level
+                    ],
+                    'note' => 'Add gateway group for Multi-WAN'
+                ];
+                $ops[] = [
+                    'type' => 'firewall_rule_add',
+                    'path' => 'filter/rule[+]',
+                    'value' => [
+                        'interface' => 'lan',
+                        'action' => 'policy-route',
+                        'gateway_group' => 'ai_group',
+                        'description' => 'Default LAN policy-route to gateway group'
+                    ],
+                    'note' => 'Policy routing rule for LAN to gateway group'
+                ];
+                $ops[] = [
+                    'type' => 'rule_anchor_note',
+                    'path' => '',
+                    'value' => [],
+                    'note' => 'Multi-WAN (' . strtoupper($mode) . ') with group and policy routing.'
+                ];
                 $impacts = [
                     'Establishes policy routing; may temporarily disrupt flows on apply.'
                 ];
@@ -165,43 +224,10 @@ class AIWizards
                     'Sticky connections and session persistence.',
                     'DNS egress consistency.'
                 ];
-                // Gateway group
-                $group = [
-                    'op' => 'gateway_group_add',
-                    'ifaces' => $wan_ifaces,
-                    'mode' => $mode,
-                    'weights' => [],
-                    'monitor_ips' => [],
-                    'trigger_level' => $a['trigger_level'] ?? 'packet-loss'
-                ];
-                if ($mode === 'load-balance' && !empty($a['weights'])) {
-                    $group['weights'] = array_map('trim', explode(',', $a['weights']));
-                }
-                if (!empty($a['monitor_ips'])) {
-                    $group['monitor_ips'] = array_map('trim', explode(',', $a['monitor_ips']));
-                }
-                $ops[] = $group;
-                $ops[] = [
-                    'op' => 'firewall_rule_add',
-                    'anchor' => 'lan',
-                    'iface' => 'lan',
-                    'action' => 'policy-route',
-                    'gateway_group' => 'ai_group',
-                    'desc' => 'Default LAN policy-route to gateway group'
-                ];
-                $ops[] = [
-                    'op' => 'rule_anchor_note',
-                    'note' => 'Multi-WAN (' . strtoupper($mode) . ') with group and policy routing.'
-                ];
-                return [
-                    'operations' => $ops,
-                    'impacts' => $impacts,
-                    'risk_warnings' => $risks,
-                    'explanation' => 'Sets up Multi-WAN with gateway group and policy-based routing.'
-                ];
+                $explanation = 'Sets up Multi-WAN with gateway group and policy-based routing.';
+                break;
             case 'vpn':
                 $vpn_type = strtolower(trim($a['vpn_type'] ?? 'openvpn'));
-                $ops = [];
                 $impacts = [
                     'VPN setup may affect routing and firewall rules.',
                     'Auth misconfiguration can cause management lockout.'
@@ -212,73 +238,99 @@ class AIWizards
                 ];
                 if ($vpn_type === 'openvpn') {
                     $ops[] = [
-                        'op' => 'openvpn_server_add',
-                        'port' => $a['openvpn_port'] ?? 1194,
-                        'proto' => $a['openvpn_proto'] ?? 'udp',
-                        'auth' => $a['openvpn_auth'] ?? 'cert',
-                        'tunnel_network' => $a['openvpn_tun'] ?? '',
-                        'local_networks' => $a['openvpn_localnets'] ?? '',
-                        'dns' => $a['openvpn_dns'] ?? ''
+                        'type' => 'openvpn_server_add',
+                        'path' => 'openvpn/server[+]',
+                        'value' => [
+                            'port' => $a['openvpn_port'] ?? 1194,
+                            'proto' => $a['openvpn_proto'] ?? 'udp',
+                            'auth' => $a['openvpn_auth'] ?? 'cert',
+                            'tunnel_network' => $a['openvpn_tun'] ?? '',
+                            'local_networks' => $a['openvpn_localnets'] ?? '',
+                            'dns' => $a['openvpn_dns'] ?? ''
+                        ],
+                        'note' => 'Add OpenVPN server'
                     ];
                     $ops[] = [
-                        'op' => 'firewall_rule_add',
-                        'anchor' => 'wan',
-                        'iface' => 'wan',
-                        'proto' => $a['openvpn_proto'] ?? 'udp',
-                        'port' => $a['openvpn_port'] ?? 1194,
-                        'desc' => 'Allow OpenVPN server'
+                        'type' => 'firewall_rule_add',
+                        'path' => 'filter/rule[+]',
+                        'value' => [
+                            'interface' => 'wan',
+                            'proto' => $a['openvpn_proto'] ?? 'udp',
+                            'port' => $a['openvpn_port'] ?? 1194,
+                            'action' => 'pass',
+                            'description' => 'Allow OpenVPN server'
+                        ],
+                        'note' => 'Allow OpenVPN port on WAN'
                     ];
                     $ops[] = [
-                        'op' => 'interface_assign',
-                        'iface' => 'ovpn_server'
+                        'type' => 'interface_assign',
+                        'path' => 'interfaces/opt[+]',
+                        'value' => [
+                            'interface' => 'ovpn_server'
+                        ],
+                        'note' => 'Assign OpenVPN interface'
                     ];
                     $ops[] = [
-                        'op' => 'rule_anchor_note',
+                        'type' => 'rule_anchor_note',
+                        'path' => '',
+                        'value' => [],
                         'note' => 'OpenVPN server and firewall rule configured.'
                     ];
                 } else {
                     // IPsec
                     $ops[] = [
-                        'op' => 'ipsec_phase1_add',
-                        'peer_ip' => $a['ipsec_peer_ip'] ?? '',
-                        'auth' => $a['ipsec_auth'] ?? 'psk',
-                        'phase1' => $a['ipsec_phase1'] ?? 'AES256/SHA256',
-                        'lifetime' => $a['ipsec_p1_lifetime'] ?? 28800
+                        'type' => 'ipsec_phase1_add',
+                        'path' => 'ipsec/phase1[+]',
+                        'value' => [
+                            'peer_ip' => $a['ipsec_peer_ip'] ?? '',
+                            'auth' => $a['ipsec_auth'] ?? 'psk',
+                            'phase1' => $a['ipsec_phase1'] ?? 'AES256/SHA256',
+                            'lifetime' => $a['ipsec_p1_lifetime'] ?? 28800
+                        ],
+                        'note' => 'Add IPsec Phase1'
                     ];
                     $ops[] = [
-                        'op' => 'ipsec_phase2_add',
-                        'local' => $a['ipsec_p2_local'] ?? '',
-                        'remote' => $a['ipsec_p2_remote'] ?? '',
-                        'lifetime' => $a['ipsec_p2_lifetime'] ?? 3600
+                        'type' => 'ipsec_phase2_add',
+                        'path' => 'ipsec/phase2[+]',
+                        'value' => [
+                            'local' => $a['ipsec_p2_local'] ?? '',
+                            'remote' => $a['ipsec_p2_remote'] ?? '',
+                            'lifetime' => $a['ipsec_p2_lifetime'] ?? 3600
+                        ],
+                        'note' => 'Add IPsec Phase2'
                     ];
                     $ops[] = [
-                        'op' => 'firewall_rule_add',
-                        'anchor' => 'ipsec',
-                        'iface' => 'wan',
-                        'proto' => 'esp',
-                        'desc' => 'Allow IPsec'
+                        'type' => 'firewall_rule_add',
+                        'path' => 'filter/rule[+]',
+                        'value' => [
+                            'interface' => 'wan',
+                            'proto' => 'esp',
+                            'action' => 'pass',
+                            'description' => 'Allow IPsec'
+                        ],
+                        'note' => 'Allow IPsec traffic on WAN'
                     ];
                     $ops[] = [
-                        'op' => 'rule_anchor_note',
+                        'type' => 'rule_anchor_note',
+                        'path' => '',
+                        'value' => [],
                         'note' => 'IPsec phases and firewall adjustment previewed.'
                     ];
                 }
-                return [
-                    'operations' => $ops,
-                    'impacts' => $impacts,
-                    'risk_warnings' => $risks,
-                    'explanation' => $vpn_type === 'openvpn'
-                        ? 'Configures an OpenVPN server with chosen authentication and firewall rules.'
-                        : 'Configures IPsec tunnels (Phase1/Phase2) and firewall rules.'
-                ];
+                $explanation = ($vpn_type === 'openvpn')
+                    ? 'Configures an OpenVPN server with chosen authentication and firewall rules.'
+                    : 'Configures IPsec tunnels (Phase1/Phase2) and firewall rules.';
+                break;
             default:
-                return [
-                    'operations' => [],
-                    'impacts' => [],
-                    'risk_warnings' => [],
-                    'explanation' => 'Unknown wizard type.'
-                ];
+                $explanation = 'Unknown wizard type.';
+                break;
         }
+        return [
+            'operations' => $ops,
+            'impacts' => $impacts,
+            'risk_warnings' => $risks,
+            'explanation' => $explanation
+        ];
     }
 
     // Utility: get question order for type and branch

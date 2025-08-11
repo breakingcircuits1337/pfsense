@@ -327,9 +327,8 @@ class AIProviderFactory {
         }
         // Prefer Ollama if reachable
         try {
-            $ollama = new ProviderOllama();
-            // Try a simple health check (HEAD or GET to /api/tags)
-            $host = $ollama->host;
+            // Health check using config/env, don't access protected property
+            $host = AIProvider::get_config_value('system/ai/ollama/host', getenv('OLLAMA_HOST') ?: '127.0.0.1');
             $ch = curl_init("http://{$host}:11434/api/tags");
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 2);
@@ -337,7 +336,7 @@ class AIProviderFactory {
             $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
             if ($http === 200 && $tags !== false) {
-                return $ollama;
+                return new ProviderOllama();
             }
         } catch (\Exception $e) {
             // Ignore Ollama failure

@@ -1,11 +1,11 @@
 <?php
 /**
  * AIRuleAnalyzer — pfSense AI-powered configuration analyzer.
- * 
- * SECURITY WARNING: This class is strictly PREVIEW-ONLY. 
- * It NEVER writes or modifies $config or system state.
- * All suggestions are for review, not for direct application.
- * 
+ *
+ * PREVIEW-ONLY: This class strictly generates suggestions and previews.
+ * NEVER writes or modifies $config or system state.
+ * All operation items have: [ 'type', 'path', 'value', 'note?' ] and are non-destructive.
+ *
  * Usage: AIRuleAnalyzer::analyze() and AIRuleAnalyzer::renderReport().
  */
 
@@ -156,22 +156,76 @@ class AIRuleAnalyzer
      */
     public static function renderReport(array $analysis): array
     {
+        // Generate summary text and standardized operation proposal.
         $text = $analysis['summary'] . "\n";
+        $operations = [];
         foreach ($analysis['findings'] as $f) {
             $sev = strtoupper($f['severity']);
             $text .= "- [{$sev}] {$f['description']} (Rationale: {$f['rationale']})\n";
-        }
-        // Extract suggested operations for diff
-        $diff = [];
-        foreach ($analysis['findings'] as $f) {
+            // For each finding, preview-only operations as AIPlanRenderer expects
             foreach ($f['suggested_operations'] as $op) {
-                $diff[] = $op;
+                // Map op to schema: type, path, value, note.
+                $type = '';
+                $path = '';
+                $value = [];
+                $note = '';
+                switch ($op['op']) {
+                    case 'move_rule':
+                        $type = 'rule_anchor_note';
+                        $path = "filter/rule/" . ($op['rule_idx'] ?? '');
+                        $value = [];
+                        $note = "[AI] Suggest moving or reordering rule #" . ($op['rule_idx'] ?? '') . ": " . ($op['details'] ?? '');
+                        break;
+                    case 'disable_rule':
+                        $type = 'rule_anchor_note';
+                        $path = "filter/rule/" . ($op['rule_idx'] ?? '');
+                        $value = [];
+                        $note = "[AI] Suggest disabling duplicate rule #" . ($op['rule_idx'] ?? '') . ": " . ($op['details'] ?? '');
+                        break;
+                    case 'tighten_rule':
+                        $type = 'rule_anchor_note';
+                        $path = "filter/rule/" . ($op['rule_idx'] ?? '');
+                        $value = [];
+                        $note = "[AI] Suggest tightening WAN rule #" . ($op['rule_idx'] ?? '') . ": " . ($op['details'] ?? '');
+                        break;
+                    case 'restrict_nat':
+                        $type = 'rule_anchor_note';
+                        $path = "nat/rule/" . ($op['nat_idx'] ?? '');
+                        $value = [];
+                        $note = "[AI] Suggest restricting NAT #" . ($op['nat_idx'] ?? '') . ": " . ($op['details'] ?? '');
+                        break;
+                    case 'consolidate_nat':
+                        $type = 'rule_anchor_note';
+                        $path = "nat/outbound/rule/" . (($op['rule_indices'][0] ?? '') ?: '');
+                        $value = [];
+                        $note = "[AI] Suggest consolidating overlapping outbound NAT rules: " . implode(', ', $op['rule_indices'] ?? []);
+                        break;
+                    default:
+                        $type = 'rule_anchor_note';
+                        $path = '';
+                        $value = [];
+                        $note = '[AI] Suggestion: ' . json_encode($op);
+                        break;
+                }
+                $operations[] = [
+                    'type' => $type,
+                    'path' => $path,
+                    'value' => $value,
+                    'note' => $note
+                ];
             }
         }
+        $proposal = [
+            'operations' => $operations,
+            'impacts' => [],
+            'risk_warnings' => [],
+            'explanation' => 'AI suggestions to improve rules, preview-only, non-destructive.'
+        ];
         return [
             'text' => $text,
-            'diff' => $diff,
+            'proposal' => $proposal,
             'counts' => $analysis['metrics'],
+            'findings' => $analysis['findings']
         ];
     }
 

@@ -112,38 +112,30 @@ class AiAnalyzeRulesCommand extends Command
             $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         } else {
             $output->writeln("<info>Rule Analysis Summary:</info>");
-            $output->writeln("  Rules analyzed: " . ($report['counts']['analyzed'] ?? 0));
-            $output->writeln("  Issues found: " . ($report['counts']['issues'] ?? 0));
+            $counts = $report['counts'];
+            $output->writeln("  Total rules: " . ($counts['total_rules'] ?? 0));
+            $output->writeln("  WAN any-any pass: " . ($counts['wan_pass_any_any'] ?? 0));
+            $output->writeln("  Duplicates: " . ($counts['duplicates'] ?? 0));
+            $output->writeln("  Shadowed: " . ($counts['shadowed'] ?? 0));
+            $output->writeln("  Exposed services: " . ($counts['exposed_services'] ?? 0));
+            $output->writeln("");
+
+            $output->writeln(($analysis['summary'] ?? ''));
+
             $output->writeln("\n<info>Findings:</info>");
             foreach (($report['findings'] ?? []) as $f) {
-                $output->writeln("  - {$f}");
+                $output->writeln("  - [" . strtoupper($f['severity'] ?? '') . "] " . ($f['description'] ?? ''));
             }
-            if (!empty($report['suggested_operations'])) {
-                $output->writeln("\n<info>Suggested Operations (preview):</info>");
-                // Map suggested ops to pseudo-proposal
-                $proposalOps = [];
-                foreach ($report['suggested_operations'] as $op) {
-                    if (isset($op['op'])) {
-                        $proposalOps[] = [
-                            'op' => 'rule_anchor_note',
-                            'note' => '[AI Suggestion] ' . ($op['desc'] ?? json_encode($op))
-                        ];
-                    }
-                }
-                $plan = [
-                    'operations' => $proposalOps,
-                    'impacts' => [],
-                    'risk_warnings' => [],
-                    'explanation' => 'AI preview of rule operations.'
-                ];
-                $preview = AIPlanRenderer::render_preview($plan);
-                if (isset($preview['text'])) {
-                    $output->writeln($preview['text']);
-                }
-                if (isset($preview['diff'])) {
-                    $output->writeln($preview['diff']);
-                }
+
+            $output->writeln("\n<info>Suggested Preview:</info>");
+            $preview = AIPlanRenderer::render_preview($report['proposal']);
+            if (!empty($preview['text'])) {
+                $output->writeln($preview['text']);
             }
+            if (!empty($preview['diff'])) {
+                $output->writeln($preview['diff']);
+            }
+
             $output->writeln("\n<comment>No changes have been applied.</comment>");
         }
         return Command::SUCCESS;
