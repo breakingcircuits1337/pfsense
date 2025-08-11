@@ -9,6 +9,7 @@ require_once __DIR__ . '/../src/usr/local/pfSense/include/vendor/autoload.php';
 require_once dirname(__DIR__) . '/src/etc/inc/ai_assistant.inc';
 require_once dirname(__DIR__) . '/src/etc/inc/ai_rules.inc';
 require_once dirname(__DIR__) . '/src/etc/inc/ai_wizards.inc';
+require_once dirname(__DIR__) . '/src/etc/inc/ai_apply.inc';
 
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -20,7 +21,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class AiChatCommand extends Command
 {
     protected static $defaultName = 'ai:chat';
-    protected static $defaultDescription = 'Preview AI Assistant config plan (no changes applied)';
+    protected static $defaultDescription = 'Preview or apply AI Assistant config plan (no changes unless --apply)';
 
     protected function configure()
     {
@@ -28,7 +29,9 @@ class AiChatCommand extends Command
             ->addArgument('input', InputArgument::REQUIRED, 'Natural language request')
             ->addOption('provider', null, InputOption::VALUE_OPTIONAL, 'AI provider')
             ->addOption('model', null, InputOption::VALUE_OPTIONAL, 'AI model')
-            ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON');
+            ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
+            ->addOption('apply', null, InputOption::VALUE_NONE, 'Apply immediately (confirmation required)')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Force apply even with warnings');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -37,18 +40,46 @@ class AiChatCommand extends Command
         $providerName = $input->getOption('provider');
         $model = $input->getOption('model');
 
-        // Instantiate provider if specified (else null)
         $provider = null;
         if ($providerName) {
-    $provider = AIProviderFactory::make($providerName);
-}
-if ($model) {
-    // Model override not yet supported in CLI
-    fwrite(STDERR, "[warning] --model override is not yet supported in CLI mode.\n");
-}
+            $provider = AIProviderFactory::make($providerName);
+        }
+        if ($model) {
+            fwrite(STDERR, "[warning] --model override is not yet supported in CLI mode.\n");
+        }
 
         $assistant = new AIAssistant($provider);
         $result = $assistant->handle_request($userInput);
+
+        $doApply = $input->getOption('apply');
+        $force = $input->getOption('force');
+
+        if ($doApply) {
+            $applyResult = AIApplyEngine::apply($result['proposal'], [
+                'confirm' => true,
+                'force' => $force
+            ]);
+            if ($input->getOption('json')) {
+                $output->writeln(json_encode($applyResult, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            } else {
+                $output->writeln($applyResult['applied']
+                    ? "<info>Proposal applied successfully.</info>"
+                    : "<error>Proposal NOT applied.</error>");
+                $output->writeln($applyResult['message'] ?? '');
+                if (!empty($applyResult['warnings'])) {
+                    $output->writeln("<comment>Warnings:</comment>");
+                    foreach ($applyResult['warnings'] as $w) $output->writeln("  - $w");
+                }
+                if (!empty($applyResult['notes'])) {
+                    $output->writeln("<info>Notes:</info>");
+                    foreach ($applyResult['notes'] as $n) $output->writeln("  - $n");
+                }
+                if (!empty($applyResult['reconfigured'])) {
+                    $output->writeln("<info>Reconfigured subsystems:</info> " . implode(', ', $applyResult['reconfigured']));
+                }
+            }
+            return Command::SUCCESS;
+        }
 
         if ($input->getOption('json')) {
             $output->writeln(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -74,9 +105,80 @@ if ($model) {
                     $output->writeln("  - $q");
                 }
             }
-            $output->writeln("\n<comment>No changes have been applied. Use an explicit Apply workflow to commit changes.</comment>");
+            $output->writeln("\n<comment>No changes have been applied. Use --apply to commit changes.</comment>");
         }
-        // Always exit 0 since this is non-destructive
+        return Command::SUCCESS;
+    }
+}
+
+/**
+ * Command: ai:apply
+ * Usage: ai:apply --file=proposal.json [--confirm] [--force] [--json]
+ */
+class AiApplyCommand extends Command
+{
+    protected static $defaultName = 'ai:apply';
+    protected static $defaultDescription = 'Safely validate and apply a proposal JSON. Default is dry-run; use --confirm to commit.';
+
+    protected function configure()
+    {
+        $this
+            ->addOption('file', null, InputOption::VALUE_OPTIONAL, 'Proposal JSON file (default: stdin)')
+            ->addOption('confirm', null, InputOption::VALUE_NONE, 'Apply changes (required to commit)')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Force apply even with validation warnings')
+            ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $file = $input->getOption('file');
+        $confirm = $input->getOption('confirm');
+        $force = $input->getOption('force');
+
+        $proposal = null;
+        if ($file) {
+            if (!file_exists($file)) {
+                $output->writeln("<error>Proposal file not found: $file</error>");
+                return Command::FAILURE;
+            }
+            $proposal = json_decode(file_get_contents($file), true);
+            if (!$proposal) {
+                $output->writeln("<error>Could not parse proposal JSON.</error>");
+                return Command::FAILURE;
+            }
+        } else {
+            $stdin = stream_get_contents(STDIN);
+            $proposal = json_decode($stdin, true);
+            if (!$proposal) {
+                $output->writeln("<error>Could not parse proposal JSON from stdin.</error>");
+                return Command::FAILURE;
+            }
+        }
+
+        $options = ['confirm' => $confirm, 'force' => $force];
+        $result = AIApplyEngine::apply($proposal, $options);
+
+        if ($input->getOption('json')) {
+            $output->writeln(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            if ($result['applied']) {
+                $output->writeln("<info>Proposal applied successfully.</info>");
+                if (!empty($result['reconfigured'])) {
+                    $output->writeln("Reconfigured: " . implode(', ', $result['reconfigured']));
+                }
+            } else {
+                $output->writeln("<comment>Dry run only (no changes applied).</comment>");
+                $output->writeln($result['message'] ?? '');
+            }
+            if (!empty($result['validation']['warnings'])) {
+                $output->writeln("<comment>Warnings:</comment>");
+                foreach ($result['validation']['warnings'] as $w) $output->writeln("  - $w");
+            }
+            if (!empty($result['notes'])) {
+                $output->writeln("<info>Notes:</info>");
+                foreach ($result['notes'] as $n) $output->writeln("  - $n");
+            }
+        }
         return Command::SUCCESS;
     }
 }

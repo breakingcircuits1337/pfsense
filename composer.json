@@ -19,7 +19,8 @@
       "src/etc/inc/ai_plan_renderer.inc",
       "src/etc/inc/ai_assistant.inc",
       "src/etc/inc/ai_rules.inc",
-      "src/etc/inc/ai_wizards.inc"
+      "src/etc/inc/ai_wizards.inc",
+      "src/etc/inc/ai_apply.inc"
     ]
   },
     "config": {
