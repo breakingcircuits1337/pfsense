@@ -39,7 +39,8 @@ function signal_handler($signo) {
 $logs = [
     '/var/log/filter.log',
     '/var/log/suricata/eve.json',
-    '/var/log/snort/alert'
+    '/var/log/snort/alert',
+    '/var/log/ai_honeypot.log'
 ];
 
 $valid_logs = [];
@@ -65,6 +66,7 @@ $cmd = "tail -n 0 -F " . implode(" ", array_map('escapeshellarg', $valid_logs));
 $handle = popen($cmd, "r");
 
 $ip_cache = []; // [ip => timestamp]
+$event_memory = []; // [ip => ['score' => float, 'last_seen' => int, 'events' => []]]
 $events_log = '/var/db/ai_events.log';
 $blocklist_file = '/var/db/ai_blocklist.json';
 
@@ -86,28 +88,72 @@ while ($running && !feof($handle)) {
 
     // If we found IPs, check if we need to scan
     $needs_scan = false;
+    $target_ip = null;
+
     foreach ($ips as $ip) {
         if (!is_public($ip)) continue;
-        if (isset($ip_cache[$ip]) && (time() - $ip_cache[$ip] < 3600)) continue;
+
+        // Cleanup old memory
+        if (isset($event_memory[$ip]) && (time() - $event_memory[$ip]['last_seen'] > 3600)) {
+            unset($event_memory[$ip]);
+        }
+
+        // Simple cache for exact duplicates to avoid spamming AI on burst logs
+        if (isset($ip_cache[$ip]) && (time() - $ip_cache[$ip] < 10)) continue;
+
         $needs_scan = true;
+        $target_ip = $ip; // Focus on the first actionable public IP
         break;
     }
 
-    if (!$needs_scan) continue;
+    if (!$needs_scan || !$target_ip) continue;
 
-    // Send to AI
-    $analysis = analyze_log_line($line);
+    // Update simple cache
+    $ip_cache[$target_ip] = time();
 
-    // Update cache for all IPs in the line so we don't spam for same packet
-    foreach ($ips as $ip) {
-        $ip_cache[$ip] = time();
-    }
+    // Send to AI with context
+    $context = isset($event_memory[$target_ip]) ? $event_memory[$target_ip]['events'] : [];
+    $analysis = analyze_log_line($line, $context);
 
-    if ($analysis && isset($analysis['action']) && $analysis['action'] === 'block' && !empty($analysis['attacker_ip'])) {
-        $attacker = $analysis['attacker_ip'];
-        // Validate attacker is in the line (sanity check)
-        if (strpos($line, $attacker) !== false && is_public($attacker)) {
-             block_ip($attacker, $analysis['reason'] ?? 'AI Detected Threat');
+    if ($analysis && isset($analysis['attacker_ip']) && $analysis['attacker_ip'] === $target_ip) {
+        $score = floatval($analysis['threat_score'] ?? 0);
+        $reason = $analysis['reason'] ?? 'Detected suspicious activity';
+
+        // Initialize memory if needed
+        if (!isset($event_memory[$target_ip])) {
+            $event_memory[$target_ip] = ['score' => 0, 'last_seen' => time(), 'events' => []];
+        }
+
+        // Update memory
+        $event_memory[$target_ip]['score'] += $score;
+        $event_memory[$target_ip]['last_seen'] = time();
+        $event_memory[$target_ip]['events'][] = date('H:i:s') . ": " . $reason;
+
+        // Cap events history
+        if (count($event_memory[$target_ip]['events']) > 5) {
+            array_shift($event_memory[$target_ip]['events']);
+        }
+
+        // Decision logic
+        $accumulated_score = $event_memory[$target_ip]['score'];
+        $global_threshold = floatval($config['system']['ai']['monitor']['threshold'] ?? 0.7);
+
+        // Immediate block if single event is high confidence, or accumulated score breaches threshold
+        if (($score >= $global_threshold) || ($accumulated_score >= ($global_threshold * 1.5))) {
+             if (strpos($line, $target_ip) !== false) {
+                 $block_reason = "Accumulated Risk Score: " . $accumulated_score . ". Last: " . $reason;
+                 block_ip($target_ip, $block_reason);
+                 unset($event_memory[$target_ip]); // Clear memory after block
+             }
+        }
+
+        // Check for other playbooks (e.g. alert only)
+        if (isset($analysis['suggested_action'])) {
+            $act = $analysis['suggested_action'];
+            if ($act === 'alert_admin') {
+                // Example: Send notification to system log or email (simulated here via logger)
+                exec("/usr/bin/logger -p local0.notice " . escapeshellarg("AI Alert for $target_ip: $reason"));
+            }
         }
     }
 }
@@ -124,7 +170,7 @@ function is_public($ip) {
     return true;
 }
 
-function analyze_log_line($line) {
+function analyze_log_line($line, $context_events = []) {
     global $config;
     $conf = $config['system']['ai'] ?? [];
     if (empty($conf['monitor']['enable'])) return null;
@@ -132,6 +178,7 @@ function analyze_log_line($line) {
     $provider_name = $conf['default_provider'] ?? 'gemini';
     $threshold = floatval($conf['monitor']['threshold'] ?? 0.7);
     $shodan_key = $conf['shodan']['apikey'] ?? '';
+    $abuse_key = $conf['abuseipdb']['apikey'] ?? '';
 
     // Exponential backoff for API calls
     $attempts = 0;
@@ -141,16 +188,28 @@ function analyze_log_line($line) {
     while ($attempts < $max_attempts) {
         try {
             $provider = AIProviderFactory::make($provider_name);
-            $system = "You are a firewall security AI. Analyze the log line. Extract the ATTACKER IP. Return JSON: { \"attacker_ip\": \"1.2.3.4\" (or null), \"threat_score\": 0.0-1.0, \"action\": \"block\"|\"ignore\", \"reason\": \"...\" }";
-            $msg = "Log: $line";
+            $system = "You are a firewall security AI. Analyze the log line. Extract the ATTACKER IP. " .
+                      "Return JSON: { \"attacker_ip\": \"1.2.3.4\" (or null), \"threat_score\": 0.0-1.0, \"reason\": \"...\", \"suggested_action\": \"block\"|\"alert_admin\"|\"none\" } " .
+                      "Consider previous events if provided.";
 
-            // Extract potential IP to query Shodan
-            if (!empty($shodan_key) && preg_match('/(?<![\d.])(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\d.])/', $line, $m)) {
+            $msg = "Current Log: $line\n";
+            if (!empty($context_events)) {
+                $msg .= "Previous Events for suspected IP:\n" . implode("\n", $context_events) . "\n";
+            }
+
+            // Extract potential IP to query Threat Intel
+            if (preg_match('/(?<![\d.])(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\d.])/', $line, $m)) {
                 $attacker_ip = $m[0];
                 if (is_public($attacker_ip)) {
-                    $shodan_info = shodan_lookup($attacker_ip, $shodan_key);
-                    if ($shodan_info) {
-                        $msg .= "\n\nShodan Context: " . $shodan_info;
+                    // Shodan
+                    if (!empty($shodan_key)) {
+                        $shodan_info = shodan_lookup($attacker_ip, $shodan_key);
+                        if ($shodan_info) $msg .= "\n\nShodan Context: " . $shodan_info;
+                    }
+                    // AbuseIPDB
+                    if (!empty($abuse_key)) {
+                        $abuse_info = abuseipdb_check($attacker_ip, $abuse_key);
+                        if ($abuse_info) $msg .= "\n\nAbuseIPDB Context: " . $abuse_info;
                     }
                 }
             }
@@ -163,7 +222,7 @@ function analyze_log_line($line) {
             if ($json_start !== false && $json_end !== false) {
                 $json_str = substr($res, $json_start, $json_end - $json_start + 1);
                 $data = json_decode($json_str, true);
-                if ($data && isset($data['threat_score']) && $data['threat_score'] >= $threshold) {
+                if ($data && isset($data['threat_score'])) {
                     return $data;
                 }
             }
@@ -223,6 +282,31 @@ function shodan_lookup($ip, $key) {
             $tags = implode(", ", $data['tags'] ?? []);
             $org = $data['org'] ?? 'Unknown';
             return "Organization: $org. Open Ports: $ports. Tags: $tags.";
+        }
+    }
+    return null;
+}
+
+function abuseipdb_check($ip, $key) {
+    $url = "https://api.abuseipdb.com/api/v2/check?ipAddress=" . urlencode($ip) . "&maxAgeInDays=90";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Key: $key",
+        "Accept: application/json"
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 200 && $resp) {
+        $data = json_decode($resp, true);
+        if ($data && isset($data['data'])) {
+            $score = $data['data']['abuseConfidenceScore'] ?? 0;
+            $reports = $data['data']['totalReports'] ?? 0;
+            return "AbuseIPDB Score: $score/100. Total Reports: $reports.";
         }
     }
     return null;
