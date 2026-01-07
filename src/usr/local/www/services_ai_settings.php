@@ -13,6 +13,7 @@ $pconfig = array(
     'apikey_gemini' => $config['system']['ai']['gemini']['apikey'] ?? '',
     'apikey_mistral' => $config['system']['ai']['mistral']['apikey'] ?? '',
     'apikey_groq' => $config['system']['ai']['groq']['apikey'] ?? '',
+    'apikey_shodan' => $config['system']['ai']['shodan']['apikey'] ?? '',
     'voice_enable' => $config['system']['ai']['voice_enable'] ?? false,
     'monitor_enable' => $config['system']['ai']['monitor']['enable'] ?? false,
     'gemini_model' => $config['system']['ai']['gemini']['model'] ?? 'gemini-pro',
@@ -26,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $config['system']['ai']['gemini']['apikey']  = $_POST['apikey_gemini'] ?? '';
     $config['system']['ai']['mistral']['apikey'] = $_POST['apikey_mistral'] ?? '';
     $config['system']['ai']['groq']['apikey']    = $_POST['apikey_groq'] ?? '';
+    $config['system']['ai']['shodan']['apikey']  = $_POST['apikey_shodan'] ?? '';
     $config['system']['ai']['voice_enable'] = isset($_POST['voice_enable']);
     $config['system']['ai']['monitor']['enable'] = isset($_POST['monitor_enable']);
     $config['system']['ai']['gemini']['model'] = $_POST['gemini_model'] ?? 'gemini-pro';
@@ -43,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'apikey_gemini' => $config['system']['ai']['gemini']['apikey'],
         'apikey_mistral' => $config['system']['ai']['mistral']['apikey'],
         'apikey_groq' => $config['system']['ai']['groq']['apikey'],
+        'apikey_shodan' => $config['system']['ai']['shodan']['apikey'],
         'voice_enable' => $config['system']['ai']['voice_enable'],
         'monitor_enable' => $config['system']['ai']['monitor']['enable'],
         'gemini_model' => $config['system']['ai']['gemini']['model'],
@@ -86,6 +89,11 @@ include("head.inc");
       <input type="text" class="form-control" name="apikey_groq" value="<?=htmlspecialchars($pconfig['apikey_groq'])?>" autocomplete="off">
       <label class="mt-2">Groq Model</label>
       <input type="text" class="form-control" name="groq_model" value="<?=htmlspecialchars($pconfig['groq_model'])?>" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Shodan API Key (Optional)</label>
+      <input type="text" class="form-control" name="apikey_shodan" value="<?=htmlspecialchars($pconfig['apikey_shodan'])?>" autocomplete="off">
+      <span class="help-block">If provided, the AI Monitor will query Shodan for context on attackers.</span>
     </div>
     <div class="checkbox">
       <label>

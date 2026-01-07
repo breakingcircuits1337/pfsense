@@ -131,6 +131,7 @@ function analyze_log_line($line) {
 
     $provider_name = $conf['default_provider'] ?? 'gemini';
     $threshold = floatval($conf['monitor']['threshold'] ?? 0.7);
+    $shodan_key = $conf['shodan']['apikey'] ?? '';
 
     // Exponential backoff for API calls
     $attempts = 0;
@@ -142,6 +143,17 @@ function analyze_log_line($line) {
             $provider = AIProviderFactory::make($provider_name);
             $system = "You are a firewall security AI. Analyze the log line. Extract the ATTACKER IP. Return JSON: { \"attacker_ip\": \"1.2.3.4\" (or null), \"threat_score\": 0.0-1.0, \"action\": \"block\"|\"ignore\", \"reason\": \"...\" }";
             $msg = "Log: $line";
+
+            // Extract potential IP to query Shodan
+            if (!empty($shodan_key) && preg_match('/(?<![\d.])(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\d.])/', $line, $m)) {
+                $attacker_ip = $m[0];
+                if (is_public($attacker_ip)) {
+                    $shodan_info = shodan_lookup($attacker_ip, $shodan_key);
+                    if ($shodan_info) {
+                        $msg .= "\n\nShodan Context: " . $shodan_info;
+                    }
+                }
+            }
 
             $res = $provider->send_chat([$system, $msg]);
 
@@ -192,5 +204,27 @@ function block_ip($ip, $reason) {
     }
     $list[$ip] = ['reason' => $reason, 'time' => time()];
     file_put_contents($blocklist_file, json_encode($list));
+}
+
+function shodan_lookup($ip, $key) {
+    $url = "https://api.shodan.io/shodan/host/{$ip}?key={$key}&minify=true";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3); // Fast timeout to not block too long
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 200 && $resp) {
+        $data = json_decode($resp, true);
+        if ($data) {
+            $ports = implode(", ", $data['ports'] ?? []);
+            $tags = implode(", ", $data['tags'] ?? []);
+            $org = $data['org'] ?? 'Unknown';
+            return "Organization: $org. Open Ports: $ports. Tags: $tags.";
+        }
+    }
+    return null;
 }
 ?>
