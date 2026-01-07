@@ -18,9 +18,24 @@ function is_valid_sid($sid) {
 try {
     $provider = AIProviderFactory::make($provider_name);
     $input = json_decode(file_get_contents("php://input"), true);
-    $user_msg = $input['message'] ?? '';
-    $system_prompt = !empty($input['system']) ? $input['system'] : '';
-    $messages = $system_prompt ? [$system_prompt, $user_msg] : [$user_msg];
+    $user_msg = strip_tags($input['message'] ?? ''); // Basic sanitization
+
+    // Security: Only allow system prompts if strictly necessary or sanitize them.
+    // For now, we strip tags to prevent HTML injection if this is ever reflected directly,
+    // though the main risk is prompt injection which is inherent to LLMs.
+    $system_prompt = strip_tags(!empty($input['system']) ? $input['system'] : '');
+
+    // Enforce a hardcoded system instruction if none provided, or append to user provided one to ensure safety
+    // Ideally, for a firewall assistant, we should prepend a forceful system instruction.
+    $base_system = "You are an intelligent firewall assistant for pfSense. You help manage rules and security.";
+
+    if ($system_prompt) {
+        // If the UI sends a system prompt (e.g. for context), we trust it but prepend our base identity.
+        $messages = [$base_system . " " . $system_prompt, $user_msg];
+    } else {
+        $messages = [$base_system, $user_msg];
+    }
+
     $reply = $provider->send_chat($messages);
 
     $json = json_decode(trim($reply), true);

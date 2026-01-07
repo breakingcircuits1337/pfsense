@@ -76,7 +76,9 @@ while ($running && !feof($handle)) {
 
     // Quick parse for IP to check cache
     $ips = [];
-    if (preg_match_all('/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/', $line, $matches)) {
+    // Enhanced regex to match IPv4 addresses more accurately, excluding some common version number patterns
+    // Matches 4 groups of 1-3 digits separated by dots, surrounded by non-digit/dot characters or start/end of line
+    if (preg_match_all('/(?<![\d.])(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\d.])/', $line, $matches)) {
         $ips = $matches[0];
     }
 
@@ -130,25 +132,39 @@ function analyze_log_line($line) {
     $provider_name = $conf['default_provider'] ?? 'gemini';
     $threshold = floatval($conf['monitor']['threshold'] ?? 0.7);
 
-    try {
-        $provider = AIProviderFactory::make($provider_name);
-        $system = "You are a firewall security AI. Analyze the log line. Extract the ATTACKER IP. Return JSON: { \"attacker_ip\": \"1.2.3.4\" (or null), \"threat_score\": 0.0-1.0, \"action\": \"block\"|\"ignore\", \"reason\": \"...\" }";
-        $msg = "Log: $line";
+    // Exponential backoff for API calls
+    $attempts = 0;
+    $max_attempts = 3;
+    $backoff = 1;
 
-        $res = $provider->send_chat([$system, $msg]);
+    while ($attempts < $max_attempts) {
+        try {
+            $provider = AIProviderFactory::make($provider_name);
+            $system = "You are a firewall security AI. Analyze the log line. Extract the ATTACKER IP. Return JSON: { \"attacker_ip\": \"1.2.3.4\" (or null), \"threat_score\": 0.0-1.0, \"action\": \"block\"|\"ignore\", \"reason\": \"...\" }";
+            $msg = "Log: $line";
 
-        // Extract JSON
-        $json_start = strpos($res, '{');
-        $json_end = strrpos($res, '}');
-        if ($json_start !== false && $json_end !== false) {
-            $json_str = substr($res, $json_start, $json_end - $json_start + 1);
-            $data = json_decode($json_str, true);
-            if ($data && isset($data['threat_score']) && $data['threat_score'] >= $threshold) {
-                return $data;
+            $res = $provider->send_chat([$system, $msg]);
+
+            // Extract JSON
+            $json_start = strpos($res, '{');
+            $json_end = strrpos($res, '}');
+            if ($json_start !== false && $json_end !== false) {
+                $json_str = substr($res, $json_start, $json_end - $json_start + 1);
+                $data = json_decode($json_str, true);
+                if ($data && isset($data['threat_score']) && $data['threat_score'] >= $threshold) {
+                    return $data;
+                }
             }
+            return null; // Success but no threat detected or invalid JSON
+        } catch (Exception $e) {
+            $attempts++;
+            if ($attempts >= $max_attempts) {
+                 syslog(LOG_ERR, "AI Monitor: Failed to contact $provider_name after $attempts attempts: " . $e->getMessage());
+                 return null;
+            }
+            sleep($backoff);
+            $backoff *= 2;
         }
-    } catch (Exception $e) {
-        // Fail silent
     }
     return null;
 }
