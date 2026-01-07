@@ -17,6 +17,9 @@ $pconfig = array(
     'apikey_abuseipdb' => $config['system']['ai']['abuseipdb']['apikey'] ?? '',
     'voice_enable' => $config['system']['ai']['voice_enable'] ?? false,
     'monitor_enable' => $config['system']['ai']['monitor']['enable'] ?? false,
+    'agent_steward' => $config['system']['ai']['agents']['steward']['enable'] ?? false,
+    'agent_gatekeeper' => $config['system']['ai']['agents']['gatekeeper']['enable'] ?? false,
+    'agent_inquisitor' => $config['system']['ai']['agents']['inquisitor']['enable'] ?? false,
     'gemini_model' => $config['system']['ai']['gemini']['model'] ?? 'gemini-pro',
     'mistral_model' => $config['system']['ai']['mistral']['model'] ?? 'mistral-tiny',
     'groq_model' => $config['system']['ai']['groq']['model'] ?? 'mixtral-8x7b-32768',
@@ -32,6 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $config['system']['ai']['abuseipdb']['apikey'] = $_POST['apikey_abuseipdb'] ?? '';
     $config['system']['ai']['voice_enable'] = isset($_POST['voice_enable']);
     $config['system']['ai']['monitor']['enable'] = isset($_POST['monitor_enable']);
+    $config['system']['ai']['agents']['steward']['enable'] = isset($_POST['agent_steward']);
+    $config['system']['ai']['agents']['gatekeeper']['enable'] = isset($_POST['agent_gatekeeper']);
+    $config['system']['ai']['agents']['inquisitor']['enable'] = isset($_POST['agent_inquisitor']);
     $config['system']['ai']['gemini']['model'] = $_POST['gemini_model'] ?? 'gemini-pro';
     $config['system']['ai']['mistral']['model'] = $_POST['mistral_model'] ?? 'mistral-tiny';
     $config['system']['ai']['groq']['model'] = $_POST['groq_model'] ?? 'mixtral-8x7b-32768';
@@ -51,6 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'apikey_abuseipdb' => $config['system']['ai']['abuseipdb']['apikey'],
         'voice_enable' => $config['system']['ai']['voice_enable'],
         'monitor_enable' => $config['system']['ai']['monitor']['enable'],
+        'agent_steward' => $config['system']['ai']['agents']['steward']['enable'],
+        'agent_gatekeeper' => $config['system']['ai']['agents']['gatekeeper']['enable'],
+        'agent_inquisitor' => $config['system']['ai']['agents']['inquisitor']['enable'],
         'gemini_model' => $config['system']['ai']['gemini']['model'],
         'mistral_model' => $config['system']['ai']['mistral']['model'],
         'groq_model' => $config['system']['ai']['groq']['model'],
@@ -120,9 +129,21 @@ include("head.inc");
     </div>
     <div class="checkbox">
       <label>
-        <input type="checkbox" name="monitor_enable" <?=!empty($pconfig['monitor_enable'])?'checked':''?>> Enable Threat Monitor
+        <input type="checkbox" name="monitor_enable" <?=!empty($pconfig['monitor_enable'])?'checked':''?>> Enable Legacy Threat Monitor
       </label>
     </div>
+
+    <h4>Autonomous Agents</h4>
+    <div class="checkbox">
+      <label><input type="checkbox" name="agent_steward" <?=!empty($pconfig['agent_steward'])?'checked':''?>> Enable <strong>The Steward</strong> (Config & Health)</label>
+    </div>
+    <div class="checkbox">
+      <label><input type="checkbox" name="agent_gatekeeper" <?=!empty($pconfig['agent_gatekeeper'])?'checked':''?>> Enable <strong>The Gatekeeper</strong> (Dynamic Rule Engine)</label>
+    </div>
+    <div class="checkbox">
+      <label><input type="checkbox" name="agent_inquisitor" <?=!empty($pconfig['agent_inquisitor'])?'checked':''?>> Enable <strong>The Inquisitor</strong> (IDS/IPS Analyst)</label>
+    </div>
+
     <button class="btn btn-primary" type="submit">Save</button>
   </div>
 </div>

@@ -1,0 +1,119 @@
+#!/usr/local/bin/php
+<?php
+/*
+ * ai_agent_gatekeeper.php
+ * "The Gatekeeper" - Dynamic Rule Engine & Threat Response
+ */
+
+require_once("/etc/inc/agents.inc");
+
+class GatekeeperAgent extends AIAgent {
+    private $logs = [
+        '/var/log/filter.log',
+        '/var/log/suricata/eve.json'
+    ];
+    private $handle;
+
+    public function __construct() {
+        parent::__construct("Gatekeeper", "The muscle. Manage Allow/Block lists, micro-segmentation, and adaptive throttling.");
+        // We reuse the 'ai_blocklist' table from the original threat monitor
+    }
+
+    public function observe() {
+        // This agent needs to run continuously processing logs, similar to the original monitor
+        // For the Agent Framework pattern, we'll process a batch of lines per cycle or block briefly
+        // Ideally, this replaces ai_threat_monitor.php, effectively merging its logic here.
+
+        // For simulation, we'll check if the original monitor is running.
+        // If we migrate fully, this class handles the tail loop.
+
+        // Let's implement the "6th Sense" Pre-Emptive Shunning logic here
+        // querying the 'ai_events.log' for patterns that didn't trigger a block yet.
+
+        $events = $this->get_recent_events();
+        $this->memory['recent_patterns'] = $events;
+    }
+
+    public function analyze() {
+        $events = $this->memory['recent_patterns'] ?? [];
+        if (empty($events)) return;
+
+        // Group by IP
+        $ip_counts = [];
+        foreach ($events as $e) {
+            $ip = $e['ip'] ?? 'unknown';
+            if (!isset($ip_counts[$ip])) $ip_counts[$ip] = 0;
+            $ip_counts[$ip]++;
+        }
+
+        foreach ($ip_counts as $ip => $count) {
+            // "6th Sense": If an IP has multiple low-level events but wasn't blocked, ask AI
+            if ($count >= 3 && !$this->is_blocked($ip)) {
+                $decision = $this->ask_ai(
+                    "This IP has generated multiple low-level events ($count) but hasn't breached the block threshold. Analyze if this represents a 'low-and-slow' attack or reconnaissance. Return JSON: {\"action\": \"shun\"|\"throttle\"|\"ignore\", \"reason\": \"...\"}",
+                    "IP: $ip. Recent Events: " . json_encode(array_filter($events, function($e) use ($ip) { return $e['ip'] == $ip; }))
+                );
+
+                $json = $this->extract_json($decision);
+                if ($json) {
+                    $this->memory['decisions'][$ip] = $json;
+                }
+            }
+        }
+    }
+
+    public function act() {
+        if (!empty($this->memory['decisions'])) {
+            foreach ($this->memory['decisions'] as $ip => $d) {
+                if ($d['action'] === 'shun') {
+                    $this->log("Pre-Emptive Shun: Blocking $ip. Reason: {$d['reason']}");
+                    mwexec("/sbin/pfctl -t ai_blocklist -T add " . escapeshellarg($ip));
+                } elseif ($d['action'] === 'throttle') {
+                    $this->log("Adaptive Throttling: Limiting $ip. Reason: {$d['reason']}");
+                    // In real pfSense: Add to a 'limiter' table associated with a dummynet pipe
+                    mwexec("/sbin/pfctl -t ai_throttle -T add " . escapeshellarg($ip));
+                }
+            }
+            $this->memory['decisions'] = []; // Clear acted decisions
+        }
+    }
+
+    private function get_recent_events() {
+        $log_file = '/var/db/ai_events.log';
+        if (!file_exists($log_file)) return [];
+
+        // Read tail of ai_events.log
+        $lines = file($log_file);
+        if ($lines === false) return [];
+
+        $lines = array_slice($lines, -50);
+        $events = [];
+        foreach ($lines as $l) {
+            $data = json_decode($l, true);
+            if ($data) $events[] = $data;
+        }
+        return $events;
+    }
+
+    private function is_blocked($ip) {
+        // Check if IP is already in blocklist file (fast check)
+        $list = json_decode(file_get_contents('/var/db/ai_blocklist.json'), true);
+        return isset($list[$ip]);
+    }
+
+    private function extract_json($text) {
+        if (preg_match('/\{.*\}/s', $text, $matches)) {
+            return json_decode($matches[0], true);
+        }
+        return null;
+    }
+}
+
+// Daemon Run Loop
+$agent = new GatekeeperAgent();
+echo "Starting The Gatekeeper...\n";
+while (true) {
+    $agent->run_cycle();
+    sleep(30); // Run every 30s
+}
+?>

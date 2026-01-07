@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# PROVIDE: ai_agents
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="ai_agents"
+rcvar="ai_agents_enable"
+start_cmd="ai_agents_start"
+stop_cmd="ai_agents_stop"
+
+ai_agents_start() {
+    # Check configs and start enabled agents
+    # In a real implementation, we might parse config.xml, but here we'll assume
+    # the PHP scripts handle their own enabled/disabled state via internal config checks
+    # or we simply start them and they exit if disabled.
+    # However, for robustness, let's just launch them as background processes.
+
+    echo "Starting AI Agents..."
+    /usr/local/bin/ai_agent_steward.php >/dev/null 2>&1 &
+    echo $! > /var/run/ai_agent_steward.pid
+
+    /usr/local/bin/ai_agent_gatekeeper.php >/dev/null 2>&1 &
+    echo $! > /var/run/ai_agent_gatekeeper.pid
+
+    /usr/local/bin/ai_agent_inquisitor.php >/dev/null 2>&1 &
+    echo $! > /var/run/ai_agent_inquisitor.pid
+
+    /usr/local/bin/ai_honeypot.php >/dev/null 2>&1 &
+    echo $! > /var/run/ai_honeypot.pid
+}
+
+ai_agents_stop() {
+    echo "Stopping AI Agents..."
+    if [ -f /var/run/ai_agent_steward.pid ]; then
+        kill `cat /var/run/ai_agent_steward.pid`
+        rm /var/run/ai_agent_steward.pid
+    fi
+    if [ -f /var/run/ai_agent_gatekeeper.pid ]; then
+        kill `cat /var/run/ai_agent_gatekeeper.pid`
+        rm /var/run/ai_agent_gatekeeper.pid
+    fi
+    if [ -f /var/run/ai_agent_inquisitor.pid ]; then
+        kill `cat /var/run/ai_agent_inquisitor.pid`
+        rm /var/run/ai_agent_inquisitor.pid
+    fi
+    if [ -f /var/run/ai_honeypot.pid ]; then
+        kill `cat /var/run/ai_honeypot.pid`
+        rm /var/run/ai_honeypot.pid
+    fi
+}
+
+load_rc_config $name
+run_rc_command "$1"

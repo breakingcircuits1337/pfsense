@@ -69,8 +69,24 @@ $ip_cache = []; // [ip => timestamp]
 $event_memory = []; // [ip => ['score' => float, 'last_seen' => int, 'events' => []]]
 $events_log = '/var/db/ai_events.log';
 $blocklist_file = '/var/db/ai_blocklist.json';
+$last_gc = time();
 
 while ($running && !feof($handle)) {
+    // Garbage Collection (every 10 minutes)
+    if (time() - $last_gc > 600) {
+        foreach ($event_memory as $ip => $data) {
+            if (time() - $data['last_seen'] > 3600) {
+                unset($event_memory[$ip]);
+            }
+        }
+        foreach ($ip_cache as $ip => $ts) {
+            if (time() - $ts > 3600) {
+                unset($ip_cache[$ip]);
+            }
+        }
+        $last_gc = time();
+    }
+
     $line = fgets($handle);
     if ($line === false) break;
     $line = trim($line);
