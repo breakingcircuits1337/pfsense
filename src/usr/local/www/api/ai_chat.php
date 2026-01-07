@@ -1,4 +1,4 @@
-&lt;?php
+<?php
 /*
  * /api/ai_chat.php
  * Lightweight AI chat endpoint for pfSense AI Assistant
@@ -25,6 +25,7 @@ try {
 
     $json = json_decode(trim($reply), true);
     $result = ['reply' => $reply, 'action' => null, 'success' => false, 'message' => null];
+
     if (
         is_array($json) &&
         isset($json['target']) &&
@@ -34,6 +35,7 @@ try {
         $target = strtolower($json['target']);
         $action = strtolower($json['action']);
         $msg = isset($json['message']) ? $json['message'] : '';
+
         // Suggest flow
         if ($action === 'suggest' && isset($json['keyword'])) {
             $kw = $json['keyword'];
@@ -53,37 +55,34 @@ try {
         } else {
             $sid = $json['sid'] ?? null;
             if (!is_valid_sid($sid)) throw new Exception("Invalid SID value");
+
             if ($action === 'disable') {
                 ids_disable_sid($target, $sid);
-            ids_log_change($target, "disable", $sid, "Disabled via AI chat");
-            $result['reply'] = "Disabled rule SID $sid in $target. $msg";
-            $result['action'] = "disable";
-            $result['success'] = true;
-        } elseif ($action === 'enable') {
-            ids_enable_sid($target, $sid);
-            ids_log_change($target, "enable", $sid, "Enabled via AI chat");
-            $result['reply'] = "Enabled rule SID $sid in $target. $msg";
-            $result['action'] = "enable";
-            $result['success'] = true;
-        } elseif ($action === 'add' && isset($json['rule'])) {
-            $ruletext = $json['rule'];
-            if (strlen($ruletext) > 1024) throw new Exception("Rule text too long");
-            if (!preg_match('/sid\s*:\s*'.$sid.'/', $ruletext)) throw new Exception("SID missing from rule text");
-            $ok = ids_add_rule($target, $sid, $ruletext);
-            if ($ok) {
-                ids_log_change($target, "add", $sid, "Added via AI chat");
-                $result['reply'] = "Added custom rule SID $sid to $target. $msg";
-                $result['action'] = "add";
+                ids_log_change($target, "disable", $sid, "Disabled via AI chat");
+                $result['reply'] = "Disabled rule SID $sid in $target. $msg";
+                $result['action'] = "disable";
                 $result['success'] = true;
-            } else {
-                $result['reply'] = "SID $sid already exists in $target custom rules.";
-                $result['action'] = "add";
-                $result['success'] = false;
-            }
-        } else {
-            throw new Exception("Unrecognised IDS action");
-        }
-    }
+            } elseif ($action === 'enable') {
+                ids_enable_sid($target, $sid);
+                ids_log_change($target, "enable", $sid, "Enabled via AI chat");
+                $result['reply'] = "Enabled rule SID $sid in $target. $msg";
+                $result['action'] = "enable";
+                $result['success'] = true;
+            } elseif ($action === 'add' && isset($json['rule'])) {
+                $ruletext = $json['rule'];
+                if (strlen($ruletext) > 1024) throw new Exception("Rule text too long");
+                if (!preg_match('/sid\s*:\s*'.$sid.'/', $ruletext)) throw new Exception("SID missing from rule text");
+                $ok = ids_add_rule($target, $sid, $ruletext);
+                if ($ok) {
+                    ids_log_change($target, "add", $sid, "Added via AI chat");
+                    $result['reply'] = "Added custom rule SID $sid to $target. $msg";
+                    $result['action'] = "add";
+                    $result['success'] = true;
+                } else {
+                    $result['reply'] = "SID $sid already exists in $target custom rules.";
+                    $result['action'] = "add";
+                    $result['success'] = false;
+                }
             } else {
                 throw new Exception("Unrecognised IDS action");
             }
