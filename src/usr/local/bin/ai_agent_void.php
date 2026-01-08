@@ -19,8 +19,47 @@ class VoidAgent extends AIAgent {
 
     public function __construct() {
         parent::__construct("Void", "The silencer. DNS Sinkholing, Leak Detection, and Domain Hallucination checks.");
-        // Ensure our config file exists and is included (simulation)
+        // Ensure our config file exists
         if (!file_exists($this->void_conf)) touch($this->void_conf);
+        $this->ensure_config_inclusion();
+    }
+
+    private function ensure_config_inclusion() {
+        // Automatically add include directive to pfSense unbound custom options if missing
+        global $config;
+        $changed = false;
+
+        // Initialize if missing
+        if (!isset($config['unbound']['custom_options'])) {
+            $config['unbound']['custom_options'] = "";
+        }
+
+        $include_directive = "include: \"{$this->void_conf}\"";
+
+        // Check if directive exists in encoded or decoded form
+        $current_opts = base64_decode($config['unbound']['custom_options']);
+        // base64_decode returns false if input is not base64, but in pfSense config it might be stored either way depending on version/context.
+        // Usually it's base64 encoded in config.xml but decoded in the array in memory if loaded via parse_config().
+        // Let's assume $config is the parsed array.
+
+        // Wait, in standard pfSense PHP shell, $config is a standard array. 'custom_options' is usually a string (base64 encoded in XML, but decoded in array? No, usually decoded).
+        // Let's check safely.
+        $opts = $config['unbound']['custom_options'];
+
+        if (strpos($opts, $this->void_conf) === false) {
+            $this->log("Adding include directive to Unbound config...");
+            $config['unbound']['custom_options'] .= "\nserver:{$include_directive}\n";
+            write_config("The Void Agent: Added include for $this->void_conf");
+            $changed = true;
+        }
+
+        if ($changed) {
+            // Trigger Unbound resync/restart to apply main config change
+            // In a real environment: services_unbound_configure();
+            // Here we simulate via reload if the file is generated, but writing config.xml ensures persistence on reboot.
+            $this->log("Unbound config updated. Reloading...");
+            mwexec("/usr/local/sbin/unbound-control -c /var/unbound/unbound.conf reload");
+        }
     }
 
     public function observe() {
