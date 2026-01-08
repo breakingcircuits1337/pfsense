@@ -154,6 +154,19 @@ while ($running && !feof($handle)) {
         $accumulated_score = $event_memory[$target_ip]['score'];
         $global_threshold = floatval($config['system']['ai']['monitor']['threshold'] ?? 0.7);
 
+        // Log suspicious events for The Gatekeeper, even if we don't block yet
+        if ($score > 0.3) {
+            // Only log if significant enough to be interesting
+             $suspicious_entry = json_encode([
+                'type' => 'suspicious',
+                'ip' => $target_ip,
+                'score' => $score,
+                'reason' => $reason,
+                'timestamp' => time()
+            ]);
+            file_put_contents($events_log, $suspicious_entry . "\n", FILE_APPEND);
+        }
+
         // Immediate block if single event is high confidence, or accumulated score breaches threshold
         if (($score >= $global_threshold) || ($accumulated_score >= ($global_threshold * 1.5))) {
              if (strpos($line, $target_ip) !== false) {
