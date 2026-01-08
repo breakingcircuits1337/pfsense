@@ -20,6 +20,7 @@ $pconfig = array(
     'agent_steward' => $config['system']['ai']['agents']['steward']['enable'] ?? false,
     'agent_gatekeeper' => $config['system']['ai']['agents']['gatekeeper']['enable'] ?? false,
     'agent_inquisitor' => $config['system']['ai']['agents']['inquisitor']['enable'] ?? false,
+    'agent_void' => $config['system']['ai']['agents']['void']['enable'] ?? false,
     'gemini_model' => $config['system']['ai']['gemini']['model'] ?? 'gemini-pro',
     'mistral_model' => $config['system']['ai']['mistral']['model'] ?? 'mistral-tiny',
     'groq_model' => $config['system']['ai']['groq']['model'] ?? 'mixtral-8x7b-32768',
@@ -38,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $config['system']['ai']['agents']['steward']['enable'] = isset($_POST['agent_steward']);
     $config['system']['ai']['agents']['gatekeeper']['enable'] = isset($_POST['agent_gatekeeper']);
     $config['system']['ai']['agents']['inquisitor']['enable'] = isset($_POST['agent_inquisitor']);
+    $config['system']['ai']['agents']['void']['enable'] = isset($_POST['agent_void']);
     $config['system']['ai']['gemini']['model'] = $_POST['gemini_model'] ?? 'gemini-pro';
     $config['system']['ai']['mistral']['model'] = $_POST['mistral_model'] ?? 'mistral-tiny';
     $config['system']['ai']['groq']['model'] = $_POST['groq_model'] ?? 'mixtral-8x7b-32768';
@@ -60,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'agent_steward' => $config['system']['ai']['agents']['steward']['enable'],
         'agent_gatekeeper' => $config['system']['ai']['agents']['gatekeeper']['enable'],
         'agent_inquisitor' => $config['system']['ai']['agents']['inquisitor']['enable'],
+        'agent_void' => $config['system']['ai']['agents']['void']['enable'],
         'gemini_model' => $config['system']['ai']['gemini']['model'],
         'mistral_model' => $config['system']['ai']['mistral']['model'],
         'groq_model' => $config['system']['ai']['groq']['model'],
@@ -142,6 +145,9 @@ include("head.inc");
     </div>
     <div class="checkbox">
       <label><input type="checkbox" name="agent_inquisitor" <?=!empty($pconfig['agent_inquisitor'])?'checked':''?>> Enable <strong>The Inquisitor</strong> (IDS/IPS Analyst)</label>
+    </div>
+    <div class="checkbox">
+      <label><input type="checkbox" name="agent_void" <?=!empty($pconfig['agent_void'])?'checked':''?>> Enable <strong>The Void</strong> (DNS & Content Filter)</label>
     </div>
 
     <button class="btn btn-primary" type="submit">Save</button>
