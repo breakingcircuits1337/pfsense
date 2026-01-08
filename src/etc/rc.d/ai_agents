@@ -31,6 +31,9 @@ ai_agents_start() {
     /usr/local/bin/ai_agent_void.php >/dev/null 2>&1 &
     echo $! > /var/run/ai_agent_void.pid
 
+    /usr/local/bin/ai_agent_warden.php >/dev/null 2>&1 &
+    echo $! > /var/run/ai_agent_warden.pid
+
     /usr/local/bin/ai_honeypot.php >/dev/null 2>&1 &
     echo $! > /var/run/ai_honeypot.pid
 }
@@ -52,6 +55,10 @@ ai_agents_stop() {
     if [ -f /var/run/ai_agent_void.pid ]; then
         kill `cat /var/run/ai_agent_void.pid`
         rm /var/run/ai_agent_void.pid
+    fi
+    if [ -f /var/run/ai_agent_warden.pid ]; then
+        kill `cat /var/run/ai_agent_warden.pid`
+        rm /var/run/ai_agent_warden.pid
     fi
     if [ -f /var/run/ai_honeypot.pid ]; then
         kill `cat /var/run/ai_honeypot.pid`

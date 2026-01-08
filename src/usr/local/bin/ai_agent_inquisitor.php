@@ -15,11 +15,22 @@ class InquisitorAgent extends AIAgent {
     }
 
     public function observe() {
-        // Read new Suricata alerts
-        // (Simplified: Reading last 20 lines)
+        // Discover Suricata log file if not set or invalid
+        if (!file_exists($this->suricata_log)) {
+            $candidates = glob('/var/log/suricata/*/eve.json');
+            if ($candidates && count($candidates) > 0) {
+                // Pick the most recently modified one
+                usort($candidates, function($a, $b) { return filemtime($b) - filemtime($a); });
+                $this->suricata_log = $candidates[0];
+            }
+        }
+
         if (!file_exists($this->suricata_log)) return;
 
-        $lines = array_slice(file($this->suricata_log), -20);
+        // Read new Suricata alerts safely
+        $cmd = "tail -n 20 " . escapeshellarg($this->suricata_log);
+        exec($cmd, $lines);
+
         foreach ($lines as $line) {
             $alert = json_decode($line, true);
             if ($alert && isset($alert['event_type']) && $alert['event_type'] === 'alert') {

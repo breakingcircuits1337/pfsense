@@ -35,20 +35,31 @@ class VoidAgent extends AIAgent {
         }
 
         $include_directive = "include: \"{$this->void_conf}\"";
-
-        // Check if directive exists in encoded or decoded form
-        $current_opts = base64_decode($config['unbound']['custom_options']);
-        // base64_decode returns false if input is not base64, but in pfSense config it might be stored either way depending on version/context.
-        // Usually it's base64 encoded in config.xml but decoded in the array in memory if loaded via parse_config().
-        // Let's assume $config is the parsed array.
-
-        // Wait, in standard pfSense PHP shell, $config is a standard array. 'custom_options' is usually a string (base64 encoded in XML, but decoded in array? No, usually decoded).
-        // Let's check safely.
         $opts = $config['unbound']['custom_options'];
+
+        // Check for base64
+        if (base64_encode(base64_decode($opts, true)) === $opts) {
+             $opts = base64_decode($opts);
+             $was_encoded = true;
+        } else {
+             $was_encoded = false;
+        }
 
         if (strpos($opts, $this->void_conf) === false) {
             $this->log("Adding include directive to Unbound config...");
-            $config['unbound']['custom_options'] .= "\nserver:{$include_directive}\n";
+            // pfSense Unbound custom options usually need 'server:' prefix if not already present,
+            // but often the UI wraps it. However, 'include:' must be inside 'server:'.
+            // We check if 'server:' block is implicit or explicit.
+            // Safest bet is to append it.
+
+            $opts .= "\nserver:{$include_directive}\n";
+
+            if ($was_encoded) {
+                $config['unbound']['custom_options'] = base64_encode($opts);
+            } else {
+                $config['unbound']['custom_options'] = $opts;
+            }
+
             write_config("The Void Agent: Added include for $this->void_conf");
             $changed = true;
         }
@@ -65,9 +76,10 @@ class VoidAgent extends AIAgent {
     public function observe() {
         if (!file_exists($this->log_file)) return;
 
-        // Tail the log (last 50 lines)
-        // Format often: Jan 22 10:00:00 unbound[12345]: info: 192.168.1.100 example.com. A IN
-        $lines = array_slice(file($this->log_file), -50);
+        // Tail the log safely (last 50 lines)
+        $cmd = "tail -n 50 " . escapeshellarg($this->log_file);
+        exec($cmd, $lines);
+
         foreach ($lines as $line) {
             // Regex to extract domain from query log
             // Adjust regex based on actual Unbound log verbosity 2 format

@@ -96,11 +96,11 @@ class GatekeeperAgent extends AIAgent {
         $log_file = '/var/db/ai_events.log';
         if (!file_exists($log_file)) return [];
 
-        // Read tail of ai_events.log
-        $lines = file($log_file);
-        if ($lines === false) return [];
+        // Read tail of ai_events.log safely
+        // Use exec/tail to avoid loading massive files into memory
+        $cmd = "tail -n 50 " . escapeshellarg($log_file);
+        exec($cmd, $lines);
 
-        $lines = array_slice($lines, -50);
         $events = [];
         foreach ($lines as $l) {
             $data = json_decode($l, true);
