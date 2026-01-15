@@ -27,7 +27,8 @@ try {
 
     // Enforce a hardcoded system instruction if none provided, or append to user provided one to ensure safety
     // Ideally, for a firewall assistant, we should prepend a forceful system instruction.
-    $base_system = "You are an intelligent firewall assistant for pfSense. You help manage rules and security.";
+    $ai_context = ai_get_system_context();
+    $base_system = "You are an intelligent firewall assistant for pfSense. You help manage rules and security.\n\nSYSTEM CONTEXT:\n$ai_context";
 
     if ($system_prompt) {
         // If the UI sends a system prompt (e.g. for context), we trust it but prepend our base identity.

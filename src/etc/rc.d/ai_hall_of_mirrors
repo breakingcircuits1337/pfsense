@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# PROVIDE: ai_hall_of_mirrors
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="ai_hall_of_mirrors"
+rcvar="ai_hall_of_mirrors_enable"
+command="/usr/local/bin/ai_hall_of_mirrors.php"
+pidfile="/var/run/${name}.pid"
+
+load_rc_config $name
+run_rc_command "$1"

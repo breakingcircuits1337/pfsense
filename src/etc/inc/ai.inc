@@ -203,3 +203,37 @@ class AIProviderFactory {
         }
     }
 }
+
+function ai_get_system_context() {
+    global $config;
+    $context = [];
+
+    // Interfaces
+    $if_strs = [];
+    if (isset($config['interfaces'])) {
+        foreach ($config['interfaces'] as $ifname => $ifdata) {
+            $descr = isset($ifdata['descr']) ? $ifdata['descr'] : strtoupper($ifname);
+            $ip = isset($ifdata['ipaddr']) ? $ifdata['ipaddr'] : 'n/a';
+            $if_strs[] = "$descr ($ifname) [$ip]";
+        }
+    }
+    $context[] = "Interfaces: " . implode(", ", $if_strs);
+
+    // Aliases
+    $alias_strs = [];
+    if (isset($config['aliases']['alias']) && is_array($config['aliases']['alias'])) {
+        foreach ($config['aliases']['alias'] as $a) {
+             $alias_strs[] = $a['name'] . "(" . $a['type'] . ")";
+        }
+    }
+    if ($alias_strs) {
+        $context[] = "Aliases: " . implode(", ", $alias_strs);
+    }
+
+    // Rule Summary
+    if (isset($config['filter']['rule']) && is_array($config['filter']['rule'])) {
+        $context[] = "Active Rules: " . count($config['filter']['rule']) . " defined.";
+    }
+
+    return implode("\n", $context);
+}
